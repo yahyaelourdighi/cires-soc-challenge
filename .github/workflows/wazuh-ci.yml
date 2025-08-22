@@ -1,0 +1,57 @@
+name: Wazuh CI/CD Pipeline
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-deploy:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Lint YAML files
+        run: yamllint .
+        continue-on-error: true
+
+      - name: Lint Ansible playbooks
+        run: ansible-lint ansible/*.yml
+        continue-on-error: true
+
+      - name: Build Nginx image
+        run: docker build -t custom-nginx:latest -f docker/Dockerfile.nginx .
+        env:
+          DOCKER_BUILDKIT: 1
+
+      - name: Scan images with Trivy
+        run: |
+          trivy image --config trivy.yaml \
+          wazuh/wazuh-indexer:4.12.0 \
+          wazuh/wazuh-manager:4.12.0 \
+          wazuh/wazuh-dashboard:4.12.0 \
+          custom-nginx:latest
+        env:
+          TRIVY_USERNAME: "${{ secrets.TRIVY_USERNAME }}"
+          TRIVY_PASSWORD: "${{ secrets.TRIVY_PASSWORD }}"
+
+      - name: Run Selenium tests
+        run: python3 tests/selenium/test_dashboard.py
+        env:
+          WAZUH_URL: https://cires-wazuh-yahya.work.gd
+          TEST_USERNAME: "${{ secrets.TEST_USERNAME }}"
+          TEST_PASSWORD: "${{ secrets.TEST_PASSWORD }}"
+
+      - name: Run API health check
+        run: python3 tests/api/health_check.py
+        env:
+          WAZUH_API_URL: https://cires-wazuh-yahya.work.gd:55000
+          API_USERNAME: "${{ secrets.API_USERNAME }}"
+          API_PASSWORD: "${{ secrets.API_PASSWORD }}"
+
+      - name: Deploy to Docker Swarm
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: ansible-playbook -i ansible/inventory.yml ansible/deploy-wazuh.yml --vault-password-file vault-pass.txt
+        env:
+          ANSIBLE_VAULT_PASSWORD: "${{ secrets.ANSIBLE_VAULT_PASSWORD }}"

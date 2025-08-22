@@ -1,0 +1,13 @@
+server.host: 0.0.0.0
+server.port: 5601
+opensearch.hosts: ["https://wazuh1-indexer:9200", "https://wazuh2-indexer:9200", "https://wazuh3-indexer:9200"]
+opensearch.ssl.verificationMode: certificate
+opensearch.ssl.certificateAuthorities: ["/usr/share/wazuh-dashboard/certs/root-ca.pem"]
+opensearch.requestHeadersAllowlist: ["securitytenant", "Authorization"]
+opensearch_security.multitenancy.enabled: true
+opensearch_security.readonly_mode.roles: ["kibana_read_only"]
+opensearch_security.cookie.secure: true
+wazuh.monitoring.enabled: true
+wazuh.monitoring.frequency: 900
+wazuh.monitoring.shards: 2
+wazuh.monitoring.replicas: 1

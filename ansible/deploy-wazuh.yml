@@ -1,0 +1,163 @@
+---
+- name: Deploy Wazuh Stack to Docker Swarm
+  hosts: wazuh
+  become: yes
+  vars_files:
+    - ../secrets/vault.yml
+  vars:
+    venv_python: /home/ubuntu/wazuh-venv/bin/python3
+    stack_name: wazuh
+    config_dir: /opt/wazuh
+  tasks:
+    - name: Install required packages
+      apt:
+        name:
+          - docker.io
+          - python3-pip
+          - python3-venv
+          - certbot
+          - python3-certbot-nginx
+          - yamllint
+          - ansible-lint
+        state: present
+        update_cache: yes
+      tags: setup
+
+    - name: Ensure ubuntu user is in docker group
+      user:
+        name: ubuntu
+        groupsizational: docker
+        append: yes
+      tags: setup
+
+    - name: Create Python virtual environment
+      command: python3 -m venv /home/ubuntu/wazuh-venv
+      args:
+        creates: /home/ubuntu/wazuh-venv
+      tags: setup
+
+    - name: Install Docker Python module in virtual environment
+      ansible.builtin.shell: "{{ venv_python }} -m pip install docker"
+      args:
+        creates: /home/ubuntu/wazuh-venv/lib/python3.10/site-packages/docker
+      tags: setup
+
+    - name: Install Ansible Python module in virtual environment
+      ansible.builtin.shell: "{{ venv_python }} -m pip install ansible"
+      args:
+        creates: /home/ubuntu/wazuh-venv/lib/python3.10/site-packages/ansible
+      tags: setup
+
+    - name: Check if Docker Swarm is initialized
+      ansible.builtin.shell: docker info --format '{{.Swarm.Local}}'
+      register: swarm_info
+      changed_when: false
+      tags: swarm
+
+    - name: Initialize Docker Swarm
+      community.docker.docker_swarm:
+        state: present
+        advertise_addr: "{{ ansible_default_ipv4.address }}"
+      when: swarm_info.stdout != 'true'
+      environment:
+        DOCKER_HOST: unix:///var/run/docker.sock
+      tags: swarm
+
+    - name: Ensure overlay network exists
+      ansible.builtin.shell: docker network create --driver overlay wazuh-net
+      args:
+        creates: /tmp/wazuh-net-created
+      register: network_result
+      changed_when: network_result.rc == 0
+      failed_when: network_result.rc != 0 and 'already exists' not in network_result.stderr
+      tags: swarm
+
+    - name: Mark network as created
+      ansible.builtin.file:
+        path: /tmp/wazuh-net-created
+        state: touch
+      when: network_result.rc == 0
+      tags: swarm
+
+    - name: Create Wazuh destination directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: ubuntu
+        group: ubuntu
+        mode: '0755'
+      loop:
+        - "{{ config_dir }}"
+        - "{{ config_dir }}/configs"
+        - "{{ config_dir }}/configs/wazuh_indexer"
+        - "{{ config_dir }}/configs/wazuh_indexer_ssl_certs"
+        - "{{ config_dir }}/configs/wazuh_cluster"
+        - "{{ config_dir }}/configs/wazuh_dashboard"
+      tags: config
+
+    - name: Copy configuration files
+      copy:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        mode: "{{ item.mode | default('0644') }}"
+      loop:
+        - { src: '../stack/wazuh-stack.yml', dest: '{{ config_dir }}/wazuh-stack.yml' }
+        - { src: '../configs/nginx.conf', dest: '{{ config_dir }}/configs/nginx.conf' }
+        - { src: '../configs/wazuh_indexer/wazuh1.indexer.yml', dest: '{{ config_dir }}/configs/wazuh_indexer/wazuh1.indexer.yml' }
+        - { src: '../configs/wazuh_indexer/wazuh2.indexer.yml', dest: '{{ config_dir }}/configs/wazuh_indexer/wazuh2.indexer.yml' }
+        - { src: '../configs/wazuh_indexer/wazuh3.indexer.yml', dest: '{{ config_dir }}/configs/wazuh_indexer/wazuh3.indexer.yml' }
+        - { src: '../configs/wazuh_indexer_ssl_certs/root-ca.pem', dest: '{{ config_dir }}/configs/wazuh_indexer_ssl_certs/root-ca.pem' }
+        - { src: '../configs/wazuh_indexer_ssl_certs/wazuh1-indexer.pem', dest: '{{ config_dir }}/configs/wazuh_indexer_ssl_certs/wazuh1-indexer.pem' }
+        - { src: '../configs/wazuh_indexer_ssl_certs/wazuh1-indexer-key.pem', dest: '{{ config_dir }}/configs/wazuh_indexer_ssl_certs/wazuh1-indexer-key.pem' }
+        - { src: '../configs/wazuh_indexer_ssl_certs/wazuh2-indexer.pem', dest: '{{ config_dir }}/configs/wazuh_indexer_ssl_certs/wazuh2-indexer.pem' }
+        - { src: '../configs/wazuh_indexer_ssl_certs/wazuh2-indexer-key.pem', dest: '{{ config_dir }}/configs/wazuh_indexer_ssl_certs/wazuh2-indexer-key.pem' }
+        - { src: '../configs/wazuh_indexer_ssl_certs/wazuh3-indexer.pem', dest: '{{ config_dir }}/configs/wazuh_indexer_ssl_certs/wazuh3-indexer.pem' }
+        - { src: '../configs/wazuh_indexer_ssl_certs/wazuh3-indexer-key.pem', dest: '{{ config_dir }}/configs/wazuh_indexer_ssl_certs/wazuh3-indexer-key.pem' }
+        - { src: '../configs/wazuh_indexer_ssl_certs/wazuh.master.pem', dest: '{{ config_dir }}/configs/wazuh_indexer_ssl_certs/wazuh.master.pem' }
+        - { src: '../configs/wazuh_indexer_ssl_certs/wazuh.master-key.pem', dest: '{{ config_dir }}/configs/wazuh_indexer_ssl_certs/wazuh.master-key.pem' }
+        - { src: '../configs/wazuh_indexer_ssl_certs/wazuh.worker.pem', dest: '{{ config_dir }}/configs/wazuh_indexer_ssl_certs/wazuh.worker.pem' }
+        - { src: '../configs/wazuh_indexer_ssl_certs/wazuh.worker-key.pem', dest: '{{ config_dir }}/configs/wazuh_indexer_ssl_certs/wazuh.worker-key.pem' }
+        - { src: '../configs/wazuh_indexer_ssl_certs/wazuh.dashboard.pem', dest: '{{ config_dir }}/configs/wazuh_indexer_ssl_certs/wazuh.dashboard.pem' }
+        - { src: '../configs/wazuh_indexer_ssl_certs/wazuh.dashboard-key.pem', dest: '{{ config_dir }}/configs/wazuh_indexer_ssl_certs/wazuh.dashboard-key.pem' }
+        - { src: '../configs/wazuh_cluster/wazuh_manager.conf', dest: '{{ config_dir }}/configs/wazuh_cluster/wazuh_manager.conf' }
+        - { src: '../configs/wazuh_cluster/wazuh_worker.conf', dest: '{{ config_dir }}/configs/wazuh_cluster/wazuh_worker.conf' }
+        - { src: '../configs/wazuh_cluster/filebeat.yml', dest: '{{ config_dir }}/configs/wazuh_cluster/filebeat.yml' }
+        - { src: '../configs/wazuh_dashboard/opensearch_dashboards.yml', dest: '{{ config_dir }}/configs/wazuh_dashboard/opensearch_dashboards.yml' }
+        - { src: '../configs/wazuh_dashboard/wazuh.yml', dest: '{{ config_dir }}/configs/wazuh_dashboard/wazuh.yml' }
+      tags: config
+
+    - name: Run Let's Encrypt setup script
+      command: /opt/wazuh/setup-letsencrypt.sh
+      args:
+        creates: /etc/letsencrypt/live/cires-wazuh-yahya.work.gd/fullchain.pem
+      register: letsencrypt_result
+      failed_when: letsencrypt_result.rc != 0 and 'already exists' not in letsencrypt_result.stderr
+      tags: certs
+
+    - name: Backup current stack configuration
+      ansible.builtin.copy:
+        src: "{{ config_dir }}/wazuh-stack.yml"
+        dest: "{{ config_dir }}/wazuh-stack.yml.bak"
+        remote_src: yes
+      ignore_errors: yes
+      tags: deploy
+
+    - name: Deploy Wazuh stack
+      community.docker.docker_stack:
+        state: present
+        name: "{{ stack_name }}"
+        compose: "{{ config_dir }}/wazuh-stack.yml"
+      environment:
+        DOCKER_HOST: unix:///var/run/docker.sock
+      register: deploy_result
+      tags: deploy
+
+    - name: Rollback on failure
+      community.docker.docker_stack:
+        state: present
+        name: "{{ stack_name }}"
+        compose: "{{ config_dir }}/wazuh-stack.yml.bak"
+      when: deploy_result.failed
+      environment:
+        DOCKER_HOST: unix:///var/run/docker.sock
+      tags: deploy
