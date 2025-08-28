@@ -1,163 +1,403 @@
 ---
-- name: Deploy Wazuh Stack to Docker Swarm
-  hosts: wazuh
+- name: Deploy Wazuh to Docker Swarm
+  hosts: swarm_manager
   become: yes
-  vars_files:
-    - ../secrets/vault.yml
   vars:
-    venv_python: /home/ubuntu/wazuh-venv/bin/python3
-    stack_name: wazuh
-    config_dir: /opt/wazuh
-  tasks:
+    vault_addr: "http://127.0.0.1:8200"
+    vault_token: "myroot"
+    domain: "cires-wazuh-yahya.work.gd"
+    public_ip: "52.0.98.231"
+    wazuh_version: "4.12.0"
+    stack_name: "wazuh"
+    overlay_network: "wazuh_net"
+    certbot_email: "yahyaelourdighi.cyber@gmail.com"
+    project_root: "/home/ubuntu/cires-soc-challenge"
+  vars_files:
+    - "{{ project_root }}/ansible/secrets/vault.yml"
+
+  pre_tasks:
     - name: Install required packages
       apt:
-        name:
-          - docker.io
-          - python3-pip
-          - python3-venv
-          - certbot
-          - python3-certbot-nginx
-          - yamllint
-          - ansible-lint
+        name: "{{ packages }}"
         state: present
         update_cache: yes
-      tags: setup
+      vars:
+        packages:
+          - docker.io
+          - python3-pip
+          - certbot
+          - python3-certbot-nginx
 
-    - name: Ensure ubuntu user is in docker group
-      user:
-        name: ubuntu
-        groupsizational: docker
-        append: yes
-      tags: setup
+    - name: Install hvac for Vault integration
+      pip:
+        name: hvac
+        executable: /home/ubuntu/wazuh-venv/bin/pip
 
-    - name: Create Python virtual environment
-      command: python3 -m venv /home/ubuntu/wazuh-venv
-      args:
-        creates: /home/ubuntu/wazuh-venv
-      tags: setup
-
-    - name: Install Docker Python module in virtual environment
-      ansible.builtin.shell: "{{ venv_python }} -m pip install docker"
-      args:
-        creates: /home/ubuntu/wazuh-venv/lib/python3.10/site-packages/docker
-      tags: setup
-
-    - name: Install Ansible Python module in virtual environment
-      ansible.builtin.shell: "{{ venv_python }} -m pip install ansible"
-      args:
-        creates: /home/ubuntu/wazuh-venv/lib/python3.10/site-packages/ansible
-      tags: setup
-
-    - name: Check if Docker Swarm is initialized
-      ansible.builtin.shell: docker info --format '{{.Swarm.Local}}'
-      register: swarm_info
-      changed_when: false
-      tags: swarm
-
+  tasks:
     - name: Initialize Docker Swarm
-      community.docker.docker_swarm:
-        state: present
-        advertise_addr: "{{ ansible_default_ipv4.address }}"
-      when: swarm_info.stdout != 'true'
-      environment:
-        DOCKER_HOST: unix:///var/run/docker.sock
-      tags: swarm
+      command: docker swarm init --advertise-addr {{ public_ip }}
+      register: swarm_init
+      failed_when: swarm_init.rc != 0 and 'already part of a swarm' not in swarm_init.stderr
+      changed_when: swarm_init.rc == 0
 
-    - name: Ensure overlay network exists
-      ansible.builtin.shell: docker network create --driver overlay wazuh-net
-      args:
-        creates: /tmp/wazuh-net-created
-      register: network_result
-      changed_when: network_result.rc == 0
-      failed_when: network_result.rc != 0 and 'already exists' not in network_result.stderr
-      tags: swarm
+    - name: Create overlay network
+      command: docker network create --driver overlay --attachable {{ overlay_network }}
+      register: network_create
+      failed_when: network_create.rc != 0 and 'already exists' not in network_create.stderr
+      changed_when: network_create.rc == 0
 
-    - name: Mark network as created
-      ansible.builtin.file:
-        path: /tmp/wazuh-net-created
-        state: touch
-      when: network_result.rc == 0
-      tags: swarm
-
-    - name: Create Wazuh destination directories
-      ansible.builtin.file:
-        path: "{{ item }}"
+    - name: Create Wazuh configuration directory
+      file:
+        path: /etc/wazuh
         state: directory
-        owner: ubuntu
-        group: ubuntu
         mode: '0755'
-      loop:
-        - "{{ config_dir }}"
-        - "{{ config_dir }}/configs"
-        - "{{ config_dir }}/configs/wazuh_indexer"
-        - "{{ config_dir }}/configs/wazuh_indexer_ssl_certs"
-        - "{{ config_dir }}/configs/wazuh_cluster"
-        - "{{ config_dir }}/configs/wazuh_dashboard"
-      tags: config
+        owner: '1000'
+        group: '1000'
+
+    - name: Create Wazuh certificates directory
+      file:
+        path: /etc/wazuh/certs
+        state: directory
+        mode: '0700'
+        owner: '1000'
+        group: '1000'
+
+    - name: Create certbot webroot directory
+      file:
+        path: /var/www/certbot
+        state: directory
+        mode: '0755'
+        owner: www-data
+        group: www-data
 
     - name: Copy configuration files
       copy:
         src: "{{ item.src }}"
         dest: "{{ item.dest }}"
-        mode: "{{ item.mode | default('0644') }}"
+        mode: "{{ item.mode | default('0600') }}"
+        owner: '1000'
+        group: '1000'
       loop:
-        - { src: '../stack/wazuh-stack.yml', dest: '{{ config_dir }}/wazuh-stack.yml' }
-        - { src: '../configs/nginx.conf', dest: '{{ config_dir }}/configs/nginx.conf' }
-        - { src: '../configs/wazuh_indexer/wazuh1.indexer.yml', dest: '{{ config_dir }}/configs/wazuh_indexer/wazuh1.indexer.yml' }
-        - { src: '../configs/wazuh_indexer/wazuh2.indexer.yml', dest: '{{ config_dir }}/configs/wazuh_indexer/wazuh2.indexer.yml' }
-        - { src: '../configs/wazuh_indexer/wazuh3.indexer.yml', dest: '{{ config_dir }}/configs/wazuh_indexer/wazuh3.indexer.yml' }
-        - { src: '../configs/wazuh_indexer_ssl_certs/root-ca.pem', dest: '{{ config_dir }}/configs/wazuh_indexer_ssl_certs/root-ca.pem' }
-        - { src: '../configs/wazuh_indexer_ssl_certs/wazuh1-indexer.pem', dest: '{{ config_dir }}/configs/wazuh_indexer_ssl_certs/wazuh1-indexer.pem' }
-        - { src: '../configs/wazuh_indexer_ssl_certs/wazuh1-indexer-key.pem', dest: '{{ config_dir }}/configs/wazuh_indexer_ssl_certs/wazuh1-indexer-key.pem' }
-        - { src: '../configs/wazuh_indexer_ssl_certs/wazuh2-indexer.pem', dest: '{{ config_dir }}/configs/wazuh_indexer_ssl_certs/wazuh2-indexer.pem' }
-        - { src: '../configs/wazuh_indexer_ssl_certs/wazuh2-indexer-key.pem', dest: '{{ config_dir }}/configs/wazuh_indexer_ssl_certs/wazuh2-indexer-key.pem' }
-        - { src: '../configs/wazuh_indexer_ssl_certs/wazuh3-indexer.pem', dest: '{{ config_dir }}/configs/wazuh_indexer_ssl_certs/wazuh3-indexer.pem' }
-        - { src: '../configs/wazuh_indexer_ssl_certs/wazuh3-indexer-key.pem', dest: '{{ config_dir }}/configs/wazuh_indexer_ssl_certs/wazuh3-indexer-key.pem' }
-        - { src: '../configs/wazuh_indexer_ssl_certs/wazuh.master.pem', dest: '{{ config_dir }}/configs/wazuh_indexer_ssl_certs/wazuh.master.pem' }
-        - { src: '../configs/wazuh_indexer_ssl_certs/wazuh.master-key.pem', dest: '{{ config_dir }}/configs/wazuh_indexer_ssl_certs/wazuh.master-key.pem' }
-        - { src: '../configs/wazuh_indexer_ssl_certs/wazuh.worker.pem', dest: '{{ config_dir }}/configs/wazuh_indexer_ssl_certs/wazuh.worker.pem' }
-        - { src: '../configs/wazuh_indexer_ssl_certs/wazuh.worker-key.pem', dest: '{{ config_dir }}/configs/wazuh_indexer_ssl_certs/wazuh.worker-key.pem' }
-        - { src: '../configs/wazuh_indexer_ssl_certs/wazuh.dashboard.pem', dest: '{{ config_dir }}/configs/wazuh_indexer_ssl_certs/wazuh.dashboard.pem' }
-        - { src: '../configs/wazuh_indexer_ssl_certs/wazuh.dashboard-key.pem', dest: '{{ config_dir }}/configs/wazuh_indexer_ssl_certs/wazuh.dashboard-key.pem' }
-        - { src: '../configs/wazuh_cluster/wazuh_manager.conf', dest: '{{ config_dir }}/configs/wazuh_cluster/wazuh_manager.conf' }
-        - { src: '../configs/wazuh_cluster/wazuh_worker.conf', dest: '{{ config_dir }}/configs/wazuh_cluster/wazuh_worker.conf' }
-        - { src: '../configs/wazuh_cluster/filebeat.yml', dest: '{{ config_dir }}/configs/wazuh_cluster/filebeat.yml' }
-        - { src: '../configs/wazuh_dashboard/opensearch_dashboards.yml', dest: '{{ config_dir }}/configs/wazuh_dashboard/opensearch_dashboards.yml' }
-        - { src: '../configs/wazuh_dashboard/wazuh.yml', dest: '{{ config_dir }}/configs/wazuh_dashboard/wazuh.yml' }
-      tags: config
+        - { src: "{{ project_root }}/configs/nginx.conf", dest: "/etc/nginx/nginx.conf" }
+        - { src: "{{ project_root }}/configs/wazuh_cluster/wazuh_manager.conf", dest: "/etc/wazuh/wazuh_manager.conf" }
+        - { src: "{{ project_root }}/configs/wazuh_cluster/wazuh_worker.conf", dest: "/etc/wazuh/wazuh_worker.conf" }
+        - { src: "{{ project_root }}/configs/wazuh_dashboard/opensearch_dashboards.yml", dest: "/etc/wazuh/opensearch_dashboards.yml" }
+        - { src: "{{ project_root }}/configs/wazuh_dashboard/wazuh.yml", dest: "/etc/wazuh/wazuh.yml" }
+        - { src: "{{ project_root }}/configs/wazuh_indexer/wazuh1_indexer.yml", dest: "/etc/wazuh/wazuh1_indexer.yml" }
+        - { src: "{{ project_root }}/configs/wazuh_indexer/wazuh2_indexer.yml", dest: "/etc/wazuh/wazuh2_indexer.yml" }
+        - { src: "{{ project_root }}/configs/wazuh_indexer/wazuh3_indexer.yml", dest: "/etc/wazuh/wazuh3_indexer.yml" }
+        - { src: "{{ project_root }}/configs/wazuh_indexer/internal_users.yml", dest: "/etc/wazuh/internal_users.yml" }
+        - { src: "{{ project_root }}/stack/wazuh-stack.yml", dest: "/etc/wazuh/wazuh-stack.yml", mode: '0644' }
 
-    - name: Run Let's Encrypt setup script
-      command: /opt/wazuh/setup-letsencrypt.sh
-      args:
-        creates: /etc/letsencrypt/live/cires-wazuh-yahya.work.gd/fullchain.pem
-      register: letsencrypt_result
-      failed_when: letsencrypt_result.rc != 0 and 'already exists' not in letsencrypt_result.stderr
-      tags: certs
+    - name: Copy SSL certificates
+      copy:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        mode: '0600'
+        owner: '1000'
+        group: '1000'
+      loop:
+        - { src: "{{ project_root }}/configs/wazuh_indexer_ssl_certs/root-ca.pem", dest: "/etc/wazuh/certs/root-ca.pem" }
+        - { src: "{{ project_root }}/configs/wazuh_indexer_ssl_certs/wazuh1-indexer.pem", dest: "/etc/wazuh/certs/wazuh1-indexer.pem" }
+        - { src: "{{ project_root }}/configs/wazuh_indexer_ssl_certs/wazuh1-indexer-key.pem", dest: "/etc/wazuh/certs/wazuh1-indexer-key.pem" }
+        - { src: "{{ project_root }}/configs/wazuh_indexer_ssl_certs/wazuh2-indexer.pem", dest: "/etc/wazuh/certs/wazuh2-indexer.pem" }
+        - { src: "{{ project_root }}/configs/wazuh_indexer_ssl_certs/wazuh2-indexer-key.pem", dest: "/etc/wazuh/certs/wazuh2-indexer-key.pem" }
+        - { src: "{{ project_root }}/configs/wazuh_indexer_ssl_certs/wazuh3-indexer.pem", dest: "/etc/wazuh/certs/wazuh3-indexer.pem" }
+        - { src: "{{ project_root }}/configs/wazuh_indexer_ssl_certs/wazuh3-indexer-key.pem", dest: "/etc/wazuh/certs/wazuh3-indexer-key.pem" }
+        - { src: "{{ project_root }}/configs/wazuh_indexer_ssl_certs/wazuh.dashboard.pem", dest: "/etc/wazuh/certs/wazuh.dashboard.pem" }
+        - { src: "{{ project_root }}/configs/wazuh_indexer_ssl_certs/wazuh.dashboard-key.pem", dest: "/etc/wazuh/certs/wazuh.dashboard-key.pem" }
+        - { src: "{{ project_root }}/configs/wazuh_indexer_ssl_certs/wazuh.master.pem", dest: "/etc/wazuh/certs/wazuh.master.pem" }
+        - { src: "{{ project_root }}/configs/wazuh_indexer_ssl_certs/wazuh.master-key.pem", dest: "/etc/wazuh/certs/wazuh.master-key.pem" }
+        - { src: "{{ project_root }}/configs/wazuh_indexer_ssl_certs/wazuh.worker.pem", dest: "/etc/wazuh/certs/wazuh.worker.pem" }
+        - { src: "{{ project_root }}/configs/wazuh_indexer_ssl_certs/wazuh.worker-key.pem", dest: "/etc/wazuh/certs/wazuh.worker-key.pem" }
+        - { src: "{{ project_root }}/configs/wazuh_indexer_ssl_certs/admin.pem", dest: "/etc/wazuh/certs/admin.pem" }
+        - { src: "{{ project_root }}/configs/wazuh_indexer_ssl_certs/admin-key.pem", dest: "/etc/wazuh/certs/admin-key.pem" }
 
-    - name: Backup current stack configuration
-      ansible.builtin.copy:
-        src: "{{ config_dir }}/wazuh-stack.yml"
-        dest: "{{ config_dir }}/wazuh-stack.yml.bak"
-        remote_src: yes
-      ignore_errors: yes
-      tags: deploy
+    - name: Copy filebeat.yml to temporary location
+      copy:
+        src: /etc/wazuh/filebeat.yml
+        dest: /tmp/filebeat.yml
+        mode: '0644'
+      register: filebeat_copy
+      changed_when: filebeat_copy.changed
 
-    - name: Deploy Wazuh stack
-      community.docker.docker_stack:
-        state: present
-        name: "{{ stack_name }}"
-        compose: "{{ config_dir }}/wazuh-stack.yml"
+    - name: Initialize filebeat.yml in persistent volumes
+      command: |
+        docker run --rm \
+          -v master-filebeat-etc:/etc/filebeat \
+          -v worker-filebeat-etc:/etc/filebeat_worker \
+          -v /tmp/filebeat.yml:/tmp/filebeat.yml \
+          alpine \
+          sh -c "cp /tmp/filebeat.yml /etc/filebeat/filebeat.yml && cp /tmp/filebeat.yml /etc/filebeat_worker/filebeat.yml"
+      when: filebeat_copy.changed
+
+    - name: Check if Let's Encrypt certificates exist
+      stat:
+        path: /etc/letsencrypt/live/{{ domain }}/fullchain.pem
+      register: cert_stat
+
+    - name: Stop nginx service if running
+      systemd:
+        name: nginx
+        state: stopped
+      ignore_errors: true
+
+    - name: Setup Let's Encrypt for domain if no certificates exist
+      command: certbot certonly --standalone -d {{ domain }} --email {{ certbot_email }} --non-interactive --agree-tos
+      when: not cert_stat.stat.exists
+      register: certbot_result
+      failed_when: certbot_result.rc != 0 and 'Certificate already exists' not in certbot_result.stderr
+      changed_when: certbot_result.rc == 0
+
+    - name: Verify certificate files exist and are readable
+      stat:
+        path: "{{ item }}"
+      register: cert_files
+      loop:
+        - /etc/letsencrypt/live/{{ domain }}/fullchain.pem
+        - /etc/letsencrypt/live/{{ domain }}/privkey.pem
+
+    - name: Fail if certificate files are missing
+      ansible.builtin.fail:
+        msg: "Certificate file {{ item.item }} does not exist or is not readable"
+      when: not item.stat.exists
+      loop: "{{ cert_files.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Set proper ownership for Let's Encrypt certificates
+      file:
+        path: "{{ item.path }}"
+        owner: www-data
+        group: www-data
+        mode: "{{ item.mode }}"
+      loop:
+        - { path: "/etc/letsencrypt/live/{{ domain }}/fullchain.pem", mode: '0644' }
+        - { path: "/etc/letsencrypt/archive/{{ domain }}/fullchain1.pem", mode: '0644' }
+        - { path: "/etc/letsencrypt/live/{{ domain }}/privkey.pem", mode: '0600' }
+        - { path: "/etc/letsencrypt/archive/{{ domain }}/privkey1.pem", mode: '0600' }
+      when: cert_files.results | selectattr('stat.exists', 'equalto', true) | length > 0
+
+    - name: Ensure /tmp has correct permissions
+      file:
+        path: /tmp
+        state: directory
+        mode: '1777'
+        owner: root
+        group: root
+
+    - name: Debug /tmp directory permissions
+      command: ls -ld /tmp
+      register: tmp_perms
+      changed_when: false
+
+    - name: Display /tmp permissions
+      debug:
+        msg: "{{ tmp_perms.stdout }}"
+
+    - name: Clean up existing temporary files
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /tmp/indexer_username
+        - /tmp/indexer_password
+        - /tmp/api_username
+        - /tmp/api_password
+        - /tmp/dashboard_username
+        - /tmp/dashboard_password
+
+    - name: Debug existing files in /tmp
+      command: ls -l /tmp/indexer_* /tmp/api_* /tmp/dashboard_*
+      register: tmp_files
+      ignore_errors: true
+      changed_when: false
+
+    - name: Display existing /tmp files
+      debug:
+        msg: "{{ tmp_files.stdout_lines | default(['No files found']) }}"
+
+    - name: Fetch secrets from HashiCorp Vault using CLI
+      ansible.builtin.shell: |
+        export VAULT_ADDR={{ vault_addr }}
+        export VAULT_TOKEN={{ vault_token }}
+        set -e
+        vault kv get secret/wazuh | grep indexer_username | awk '{print $2}' > /tmp/indexer_username
+        vault kv get secret/wazuh | grep indexer_password | awk '{print $2}' > /tmp/indexer_password
+        vault kv get secret/wazuh | grep api_username | awk '{print $2}' > /tmp/api_username
+        vault kv get secret/wazuh | grep api_password | awk '{print $2}' > /tmp/api_password
+        vault kv get secret/wazuh | grep dashboard_username | awk '{print $2}' > /tmp/dashboard_username
+        vault kv get secret/wazuh | grep dashboard_password | awk '{print $2}' > /tmp/dashboard_password
+        chmod 644 /tmp/indexer_username /tmp/indexer_password /tmp/api_username /tmp/api_password /tmp/dashboard_username /tmp/dashboard_password
       environment:
-        DOCKER_HOST: unix:///var/run/docker.sock
-      register: deploy_result
-      tags: deploy
+        VAULT_ADDR: "{{ vault_addr }}"
+        VAULT_TOKEN: "{{ vault_token }}"
+      changed_when: true
+      register: vault_fetch
+      failed_when: vault_fetch.rc != 0
 
-    - name: Rollback on failure
-      community.docker.docker_stack:
-        state: present
-        name: "{{ stack_name }}"
-        compose: "{{ config_dir }}/wazuh-stack.yml.bak"
-      when: deploy_result.failed
-      environment:
-        DOCKER_HOST: unix:///var/run/docker.sock
-      tags: deploy
+    - name: Debug Vault fetch output
+      debug:
+        msg: "{{ vault_fetch.stderr_lines }}"
+      when: vault_fetch.rc != 0
+
+    - name: Fetch secrets from HashiCorp Vault using Python (fallback)
+      ansible.builtin.script: |
+        #!/usr/bin/env /home/ubuntu/wazuh-venv/bin/python
+        import hvac
+        client = hvac.Client(url='{{ vault_addr }}', token='{{ vault_token }}')
+        secret = client.secrets.kv.v2.read_secret_version(path='wazuh', mount_point='secret')
+        data = secret['data']['data']
+        with open('/tmp/indexer_username', 'w') as f:
+            f.write(data['indexer_username'] + '\n')
+        with open('/tmp/indexer_password', 'w') as f:
+            f.write(data['indexer_password'] + '\n')
+        with open('/tmp/api_username', 'w') as f:
+            f.write(data['api_username'] + '\n')
+        with open('/tmp/api_password', 'w') as f:
+            f.write(data['api_password'] + '\n')
+        with open('/tmp/dashboard_username', 'w') as f:
+            f.write(data['dashboard_username'] + '\n')
+        with open('/tmp/dashboard_password', 'w') as f:
+            f.write(data['dashboard_password'] + '\n')
+      when: vault_fetch.rc != 0
+      changed_when: true
+      register: vault_python_fetch
+
+    - name: Debug Python Vault fetch output
+      debug:
+        msg: "{{ vault_python_fetch.stderr_lines }}"
+      when: vault_python_fetch.rc is defined and vault_python_fetch.rc != 0
+
+    - name: Set permissions on temporary files (post-Python fetch)
+      file:
+        path: "{{ item }}"
+        mode: '0644'
+      loop:
+        - /tmp/indexer_username
+        - /tmp/indexer_password
+        - /tmp/api_username
+        - /tmp/api_password
+        - /tmp/dashboard_username
+        - /tmp/dashboard_password
+      when: vault_python_fetch.rc is defined and vault_python_fetch.rc == 0
+
+    - name: Verify temporary files have content
+      command: cat {{ item }}
+      loop:
+        - /tmp/indexer_username
+        - /tmp/indexer_password
+        - /tmp/api_username
+        - /tmp/api_password
+        - /tmp/dashboard_username
+        - /tmp/dashboard_password
+      register: file_contents
+      changed_when: false
+      ignore_errors: true
+
+    - name: Debug temporary file contents
+      debug:
+        msg: "{{ item.stdout | default('File not readable or empty') }}"
+      loop: "{{ file_contents.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Remove existing Docker secrets
+      command: docker secret rm {{ item.name }}
+      loop:
+        - { name: "indexer_username" }
+        - { name: "indexer_password" }
+        - { name: "api_username" }
+        - { name: "api_password" }
+        - { name: "dashboard_username" }
+        - { name: "dashboard_password" }
+      ignore_errors: true
+      changed_when: true
+
+    - name: Create Docker secrets
+      command: docker secret create {{ item.name }} {{ item.file }}
+      loop:
+        - { name: "indexer_username", file: "/tmp/indexer_username" }
+        - { name: "indexer_password", file: "/tmp/indexer_password" }
+        - { name: "api_username", file: "/tmp/api_username" }
+        - { name: "api_password", file: "/tmp/api_password" }
+        - { name: "dashboard_username", file: "/tmp/dashboard_username" }
+        - { name: "dashboard_password", file: "/tmp/dashboard_password" }
+      changed_when: true
+
+    - name: Remove any existing Wazuh stack
+      command: docker stack rm {{ stack_name }}
+      ignore_errors: true
+      changed_when: true
+
+    - name: Wait for stack removal to complete
+      pause:
+        seconds: 30
+
+    - name: Deploy Wazuh stack to Docker Swarm
+      command: docker stack deploy -c /etc/wazuh/wazuh-stack.yml {{ stack_name }}
+      changed_when: true
+
+    - name: Wait for services to start
+      pause:
+        seconds: 60
+
+    - name: Check stack deployment status
+      command: docker stack ps {{ stack_name }} --no-trunc
+      register: stack_status
+      changed_when: false
+
+    - name: Display stack status
+      debug:
+        msg: "{{ stack_status.stdout_lines }}"
+
+    - name: Setup Certbot renewal cron
+      cron:
+        name: "Renew Let's Encrypt certificates"
+        job: "certbot renew --quiet --deploy-hook 'docker service update --force {{ stack_name }}_nginx'"
+        minute: "0"
+        hour: "0,12"
+        day: "*"
+        month: "*"
+        weekday: "*"
+      changed_when: true
+
+    - name: Clean up temporary files
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /tmp/indexer_username
+        - /tmp/indexer_password
+        - /tmp/api_username
+        - /tmp/api_password
+        - /tmp/dashboard_username
+        - /tmp/dashboard_password
+        - /tmp/filebeat.yml
+
+  post_tasks:
+    - name: Wait for Wazuh dashboard to be ready
+      uri:
+        url: https://{{ domain }}
+        method: GET
+        validate_certs: no
+        timeout: 10
+      register: dashboard_check
+      until: dashboard_check.status == 200 or dashboard_check.status == 302
+      retries: 60
+      delay: 15
+      ignore_errors: true
+
+    - name: Display final status
+      debug:
+        msg: |
+          Wazuh deployment completed!
+
+          Access URLs:
+          - Wazuh Dashboard: https://{{ domain }}
+          - Wazuh API: https://{{ domain }}/api
+
+          Service Status: {{ 'Ready' if dashboard_check.status in [200, 302] else 'Starting (may take a few more minutes)' }}
+
+          To check logs: docker service logs {{ stack_name }}_nginx
+          To check status: docker stack ps {{ stack_name }}

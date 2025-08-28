@@ -1,57 +1,63 @@
 name: Wazuh CI/CD Pipeline
+
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
   pull_request:
-    branches: [ main ]
+    branches:
+      - main
 
 jobs:
-  build-and-deploy:
+  build-and-test:
     runs-on: self-hosted
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Lint YAML files
-        run: yamllint .
-        continue-on-error: true
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
 
-      - name: Lint Ansible playbooks
-        run: ansible-lint ansible/*.yml
-        continue-on-error: true
-
-      - name: Build Nginx image
-        run: docker build -t custom-nginx:latest -f docker/Dockerfile.nginx .
-        env:
-          DOCKER_BUILDKIT: 1
-
-      - name: Scan images with Trivy
+      - name: Create and activate virtual environment
         run: |
-          trivy image --config trivy.yaml \
-          wazuh/wazuh-indexer:4.12.0 \
-          wazuh/wazuh-manager:4.12.0 \
-          wazuh/wazuh-dashboard:4.12.0 \
-          custom-nginx:latest
-        env:
-          TRIVY_USERNAME: "${{ secrets.TRIVY_USERNAME }}"
-          TRIVY_PASSWORD: "${{ secrets.TRIVY_PASSWORD }}"
+          python3 -m venv wazuh-venv
+          source wazuh-venv/bin/activate
+          pip install hvac pytest selenium requests docker
+          deactivate
+
+      - name: Install Trivy
+        run: |
+          wget https://github.com/aquasecurity/trivy/releases/download/v0.65.0/trivy_0.65.0_Linux-64bit.deb
+          sudo dpkg -i trivy_0.65.0_Linux-64bit.deb
+
+      - name: Scan Docker images with Trivy
+        run: |
+          trivy image --config trivy.yaml --severity CRITICAL,HIGH --exit-code 1 wazuh/wazuh-manager:4.12.0
+          trivy image --config trivy.yaml --severity CRITICAL,HIGH --exit-code 1 wazuh/wazuh-indexer:4.12.0
+          trivy image --config trivy.yaml --severity CRITICAL,HIGH --exit-code 1 wazuh/wazuh-dashboard:4.12.0
+          trivy image --config trivy.yaml --severity CRITICAL,HIGH --exit-code 1 nginx:stable
 
       - name: Run Selenium tests
-        run: python3 tests/selenium/test_dashboard.py
-        env:
-          WAZUH_URL: https://cires-wazuh-yahya.work.gd
-          TEST_USERNAME: "${{ secrets.TEST_USERNAME }}"
-          TEST_PASSWORD: "${{ secrets.TEST_PASSWORD }}"
+        run: |
+          source wazuh-venv/bin/activate
+          export DASHBOARD_USERNAME=kibanaserver
+          export DASHBOARD_PASSWORD=kibanaserver
+          python3 -m pytest tests/selenium/test_dashboard.py
+          deactivate
 
-      - name: Run API health check
-        run: python3 tests/api/health_check.py
-        env:
-          WAZUH_API_URL: https://cires-wazuh-yahya.work.gd:55000
-          API_USERNAME: "${{ secrets.API_USERNAME }}"
-          API_PASSWORD: "${{ secrets.API_PASSWORD }}"
+      - name: Run API tests
+        run: |
+          source wazuh-venv/bin/activate
+          export API_USERNAME=wazuh-wui
+          export API_PASSWORD=MyS3cr37P450r.*-
+          python3 -m pytest tests/api/health_check.py
+          deactivate
 
-      - name: Deploy to Docker Swarm
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: ansible-playbook -i ansible/inventory.yml ansible/deploy-wazuh.yml --vault-password-file vault-pass.txt
-        env:
-          ANSIBLE_VAULT_PASSWORD: "${{ secrets.ANSIBLE_VAULT_PASSWORD }}"
+      - name: Deploy Wazuh stack
+        run: |
+          source wazuh-venv/bin/activate
+          export VAULT_TOKEN=${{ secrets.VAULT_TOKEN }}
+          ansible-playbook -i ansible/inventory.yml ansible/deploy-wazuh.yml --vault-password-file vault-pass.txt
+          deactivate

@@ -1,0 +1,58 @@
+network.host: 0.0.0.0
+node.name: wazuh1-indexer
+cluster.initial_cluster_manager_nodes:
+  - wazuh1-indexer
+  - wazuh2-indexer
+  - wazuh3-indexer
+cluster.name: wazuh-cluster
+discovery.seed_hosts:
+  - wazuh1-indexer
+  - wazuh2-indexer
+  - wazuh3-indexer
+node.max_local_storage_nodes: 3
+path.data: /var/lib/wazuh-indexer
+path.logs: /var/log/wazuh-indexer
+
+# SSL certificates
+plugins.security.ssl.http.pemcert_filepath: ${OPENSEARCH_PATH_CONF}/certs/wazuh1-indexer.pem
+plugins.security.ssl.http.pemkey_filepath: ${OPENSEARCH_PATH_CONF}/certs/wazuh1-indexer-key.pem
+plugins.security.ssl.http.pemtrustedcas_filepath: ${OPENSEARCH_PATH_CONF}/certs/root-ca.pem
+plugins.security.ssl.transport.pemcert_filepath: ${OPENSEARCH_PATH_CONF}/certs/wazuh1-indexer.pem
+plugins.security.ssl.transport.pemkey_filepath: ${OPENSEARCH_PATH_CONF}/certs/wazuh1-indexer-key.pem
+plugins.security.ssl.transport.pemtrustedcas_filepath: ${OPENSEARCH_PATH_CONF}/certs/root-ca.pem
+
+plugins.security.ssl.http.enabled: true
+plugins.security.ssl.transport.enforce_hostname_verification: false
+plugins.security.ssl.transport.resolve_hostname: false
+
+# Admin DNs - matching actual certificate subjects
+plugins.security.authcz.admin_dn:
+  - CN=wazuh-admin,O=Wazuh,L=California,ST=California,C=US
+
+plugins.security.check_snapshot_restore_write_privileges: true
+plugins.security.enable_snapshot_restore_privilege: true
+plugins.security.restapi.roles_enabled:
+  - all_access
+  - security_rest_api_access
+plugins.security.allow_default_init_securityindex: true
+plugins.security.system_indices.enabled: true
+plugins.security.system_indices.indices:
+  - .opendistro-alerting-config
+  - .opendistro-alerting-alert*
+  - .opendistro-anomaly-detector*
+  - .opendistro-reports-*
+  - .opendistro-notifications-*
+  - .opendistro-notebooks
+  - .opendistro-asynchronous-search-response*
+
+cluster.routing.allocation.disk.threshold_enabled: false
+bootstrap.memory_lock: true
+
+# Node DNs - matching actual certificate subjects
+plugins.security.nodes_dn:
+  - CN=wazuh1-indexer,O=Wazuh,L=California,ST=California,C=US
+  - CN=wazuh2-indexer,O=Wazuh,L=California,ST=California,C=US
+  - CN=wazuh3-indexer,O=Wazuh,L=California,ST=California,C=US
+  - CN=filebeat,O=Wazuh,L=California,ST=California,C=US
+
+plugins.query.datasources.encryption.masterkey: "random16charstring"

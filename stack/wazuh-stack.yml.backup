@@ -1,0 +1,339 @@
+version: '3.8'
+
+services:
+  wazuh-master:
+    image: wazuh/wazuh-manager:4.12.0
+    hostname: wazuh-master
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+    ports:
+      - target: 1515
+        published: 1515
+        mode: host
+      - target: 514
+        published: 514
+        protocol: udp
+        mode: host
+      - target: 55000
+        published: 55000
+        mode: host
+    environment:
+      - INDEXER_URL=https://wazuh1-indexer:9200
+      - FILEBEAT_SSL_VERIFICATION_MODE=full
+      - SSL_CERTIFICATE_AUTHORITIES=/etc/ssl/root-ca.pem
+      - SSL_CERTIFICATE=/etc/ssl/filebeat.pem
+      - SSL_KEY=/etc/ssl/filebeat.key
+    secrets:
+      - indexer_username
+      - indexer_password
+      - api_username
+      - api_password
+    volumes:
+      - master-wazuh-api-configuration:/var/ossec/api/configuration
+      - master-wazuh-etc:/var/ossec/etc
+      - master-wazuh-logs:/var/ossec/logs
+      - master-wazuh-queue:/var/ossec/queue
+      - master-wazuh-var-multigroups:/var/ossec/var/multigroups
+      - master-wazuh-integrations:/var/ossec/integrations
+      - master-wazuh-active-response:/var/ossec/active-response/bin
+      - master-wazuh-agentless:/var/ossec/agentless
+      - master-wazuh-wodles:/var/ossec/wodles
+      - master-filebeat-etc:/etc/filebeat
+      - master-filebeat-var:/var/lib/filebeat
+      - /etc/wazuh/certs/root-ca.pem:/etc/ssl/root-ca.pem:ro
+      - /etc/wazuh/certs/wazuh.master.pem:/etc/ssl/filebeat.pem:ro
+      - /etc/wazuh/certs/wazuh.master-key.pem:/etc/ssl/filebeat.key:ro
+      - /etc/wazuh/wazuh_manager.conf:/wazuh-config-mount/etc/ossec.conf:ro
+    networks:
+      - wazuh_net
+    depends_on:
+      - wazuh1-indexer
+      - wazuh2-indexer
+      - wazuh3-indexer
+
+  wazuh-worker:
+    image: wazuh/wazuh-manager:4.12.0
+    hostname: wazuh-worker
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+    environment:
+      - INDEXER_URL=https://wazuh1-indexer:9200
+      - FILEBEAT_SSL_VERIFICATION_MODE=full
+      - SSL_CERTIFICATE_AUTHORITIES=/etc/ssl/root-ca.pem
+      - SSL_CERTIFICATE=/etc/ssl/filebeat.pem
+      - SSL_KEY=/etc/ssl/filebeat.key
+    secrets:
+      - indexer_username
+      - indexer_password
+    volumes:
+      - worker-wazuh-api-configuration:/var/ossec/api/configuration
+      - worker-wazuh-etc:/var/ossec/etc
+      - worker-wazuh-logs:/var/ossec/logs
+      - worker-wazuh-queue:/var/ossec/queue
+      - worker-wazuh-var-multigroups:/var/ossec/var/multigroups
+      - worker-wazuh-integrations:/var/ossec/integrations
+      - worker-wazuh-active-response:/var/ossec/active-response/bin
+      - worker-wazuh-agentless:/var/ossec/agentless
+      - worker-wazuh-wodles:/var/ossec/wodles
+      - worker-filebeat-etc:/etc/filebeat
+      - worker-filebeat-var:/var/lib/filebeat
+      - /etc/wazuh/certs/root-ca.pem:/etc/ssl/root-ca.pem:ro
+      - /etc/wazuh/certs/wazuh.worker.pem:/etc/ssl/filebeat.pem:ro
+      - /etc/wazuh/certs/wazuh.worker-key.pem:/etc/ssl/filebeat.key:ro
+      - /etc/wazuh/wazuh_worker.conf:/wazuh-config-mount/etc/ossec.conf:ro
+    networks:
+      - wazuh_net
+    depends_on:
+      - wazuh1-indexer
+      - wazuh2-indexer
+      - wazuh3-indexer
+
+  wazuh1-indexer:
+    image: wazuh/wazuh-indexer:4.12.0
+    hostname: wazuh1-indexer
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+    ports:
+      - target: 9200
+        published: 9200
+        mode: host
+    environment:
+      - OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g
+      - bootstrap.memory_lock=true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - wazuh-indexer-data-1:/var/lib/wazuh-indexer
+      - /etc/wazuh/certs/root-ca.pem:/usr/share/wazuh-indexer/certs/root-ca.pem:ro
+      - /etc/wazuh/certs/wazuh1-indexer-key.pem:/usr/share/wazuh-indexer/certs/wazuh1-indexer.key:ro
+      - /etc/wazuh/certs/wazuh1-indexer.pem:/usr/share/wazuh-indexer/certs/wazuh1-indexer.pem:ro
+      - /etc/wazuh/certs/admin.pem:/usr/share/wazuh-indexer/certs/admin.pem:ro
+      - /etc/wazuh/certs/admin-key.pem:/usr/share/wazuh-indexer/certs/admin-key.pem:ro
+      - /etc/wazuh/wazuh1_indexer.yml:/usr/share/wazuh-indexer/opensearch.yml:ro
+      - /etc/wazuh/internal_users.yml:/usr/share/wazuh-indexer/opensearch-security/internal_users.yml:ro
+    networks:
+      - wazuh_net
+
+  wazuh2-indexer:
+    image: wazuh/wazuh-indexer:4.12.0
+    hostname: wazuh2-indexer
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+    environment:
+      - OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g
+      - bootstrap.memory_lock=true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - wazuh-indexer-data-2:/var/lib/wazuh-indexer
+      - /etc/wazuh/certs/root-ca.pem:/usr/share/wazuh-indexer/certs/root-ca.pem:ro
+      - /etc/wazuh/certs/wazuh2-indexer-key.pem:/usr/share/wazuh-indexer/certs/wazuh2-indexer.key:ro
+      - /etc/wazuh/certs/wazuh2-indexer.pem:/usr/share/wazuh-indexer/certs/wazuh2-indexer.pem:ro
+      - /etc/wazuh/certs/admin.pem:/usr/share/wazuh-indexer/certs/admin.pem:ro
+      - /etc/wazuh/certs/admin-key.pem:/usr/share/wazuh-indexer/certs/admin-key.pem:ro
+      - /etc/wazuh/wazuh2_indexer.yml:/usr/share/wazuh-indexer/opensearch.yml:ro
+      - /etc/wazuh/internal_users.yml:/usr/share/wazuh-indexer/opensearch-security/internal_users.yml:ro
+    networks:
+      - wazuh_net
+
+  wazuh3-indexer:
+    image: wazuh/wazuh-indexer:4.12.0
+    hostname: wazuh3-indexer
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+    environment:
+      - OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g
+      - bootstrap.memory_lock=true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - wazuh-indexer-data-3:/var/lib/wazuh-indexer
+      - /etc/wazuh/certs/root-ca.pem:/usr/share/wazuh-indexer/certs/root-ca.pem:ro
+      - /etc/wazuh/certs/wazuh3-indexer-key.pem:/usr/share/wazuh-indexer/certs/wazuh3-indexer.key:ro
+      - /etc/wazuh/certs/wazuh3-indexer.pem:/usr/share/wazuh-indexer/certs/wazuh3-indexer.pem:ro
+      - /etc/wazuh/certs/admin.pem:/usr/share/wazuh-indexer/certs/admin.pem:ro
+      - /etc/wazuh/certs/admin-key.pem:/usr/share/wazuh-indexer/certs/admin-key.pem:ro
+      - /etc/wazuh/wazuh3_indexer.yml:/usr/share/wazuh-indexer/opensearch.yml:ro
+      - /etc/wazuh/internal_users.yml:/usr/share/wazuh-indexer/opensearch-security/internal_users.yml:ro
+    networks:
+      - wazuh_net
+
+  wazuh-dashboard:
+    image: wazuh/wazuh-dashboard:4.12.0
+    hostname: wazuh-dashboard
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+    ports:
+      - target: 5601
+        published: 5601
+        mode: host
+    environment:
+      - OPENSEARCH_HOSTS=https://wazuh1-indexer:9200,https://wazuh2-indexer:9200,https://wazuh3-indexer:9200
+      - WAZUH_API_URL=https://wazuh-master:55000
+    secrets:
+      - api_username
+      - api_password
+      - dashboard_username
+      - dashboard_password
+    volumes:
+      - /etc/wazuh/certs/wazuh.dashboard.pem:/usr/share/wazuh-dashboard/certs/wazuh-dashboard.pem:ro
+      - /etc/wazuh/certs/wazuh.dashboard-key.pem:/usr/share/wazuh-dashboard/certs/wazuh-dashboard-key.pem:ro
+      - /etc/wazuh/certs/root-ca.pem:/usr/share/wazuh-dashboard/certs/root-ca.pem:ro
+      - /etc/wazuh/opensearch_dashboards.yml:/usr/share/wazuh-dashboard/config/opensearch_dashboards.yml:ro
+      - /etc/wazuh/wazuh.yml:/usr/share/wazuh-dashboard/data/wazuh/config/wazuh.yml:ro
+      - wazuh-dashboard-config:/usr/share/wazuh-dashboard/data/wazuh/config
+      - wazuh-dashboard-custom:/usr/share/wazuh-dashboard/plugins/wazuh/public/assets/custom
+    networks:
+      - wazuh_net
+    depends_on:
+      - wazuh1-indexer
+      - wazuh2-indexer
+      - wazuh3-indexer
+
+  nginx:
+    image: nginx:stable
+    hostname: nginx
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    ports:
+      - target: 80
+        published: 80
+        mode: host
+      - target: 443
+        published: 443
+        mode: host
+      - target: 1514
+        published: 1514
+        mode: host
+    volumes:
+      - /etc/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - /etc/letsencrypt/live/cires-wazuh-yahya.work.gd:/etc/letsencrypt/live/cires-wazuh-yahya.work.gd:ro
+      - /etc/letsencrypt/archive/cires-wazuh-yahya.work.gd:/etc/letsencrypt/archive/cires-wazuh-yahya.work.gd:ro
+    networks:
+      - wazuh_net
+    depends_on:
+      - wazuh-dashboard
+      - wazuh-master
+
+networks:
+  wazuh_net:
+    external: true
+
+volumes:
+  master-wazuh-api-configuration:
+  master-wazuh-etc:
+  master-wazuh-logs:
+  master-wazuh-queue:
+  master-wazuh-var-multigroups:
+  master-wazuh-integrations:
+  master-wazuh-active-response:
+  master-wazuh-agentless:
+  master-wazuh-wodles:
+  master-filebeat-etc:
+  master-filebeat-var:
+  worker-wazuh-api-configuration:
+  worker-wazuh-etc:
+  worker-wazuh-logs:
+  worker-wazuh-queue:
+  worker-wazuh-var-multigroups:
+  worker-wazuh-integrations:
+  worker-wazuh-active-response:
+  worker-wazuh-agentless:
+  worker-wazuh-wodles:
+  worker-filebeat-etc:
+  worker-filebeat-var:
+  wazuh-indexer-data-1:
+  wazuh-indexer-data-2:
+  wazuh-indexer-data-3:
+  wazuh-dashboard-config:
+  wazuh-dashboard-custom:
+
+secrets:
+  indexer_username:
+    external: true
+  indexer_password:
+    external: true
+  api_username:
+    external: true
+  api_password:
+    external: true
+  dashboard_username:
+    external: true
+  dashboard_password:
+    external: true
