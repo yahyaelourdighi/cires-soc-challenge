@@ -1,20 +1,32 @@
 filebeat.inputs:
 - type: log
+  enabled: true
   paths:
     - /var/ossec/logs/alerts/alerts.json
-  multiline:
-    pattern: '^{'
-    negate: true
-    match: after
+  json:
+    keys_under_root: true
+    overwrite_keys: true
 
 output.elasticsearch:
   hosts: ["https://wazuh1-indexer:9200", "https://wazuh2-indexer:9200", "https://wazuh3-indexer:9200"]
-  username: "logstash"
-  password: "logstash"
+  username: "admin"
+  password: "SecretPassword"
   ssl:
+    verification_mode: none
     certificate_authorities: ["/etc/ssl/root-ca.pem"]
     certificate: "/etc/ssl/filebeat.pem"
     key: "/etc/ssl/filebeat-key.pem"
+  indices:
+    - index: "wazuh-alerts-4.x-%{+yyyy.MM.dd}"
 
+setup.template.name: "wazuh"
+setup.template.pattern: "wazuh-alerts-*"
 setup.ilm.enabled: false
-setup.template.enabled: false
+
+logging.level: warning
+logging.to_files: true
+logging.files:
+  path: /var/ossec/logs/filebeat
+  name: filebeat.log
+  keepfiles: 7
+  permissions: 0640

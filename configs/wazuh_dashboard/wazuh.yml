@@ -1,7 +1,7 @@
 hosts:
   - 1513629884013:
-      url: "https://wazuh-master:55000"
+      url: "https://wazuh-master"
       port: 55000
       username: wazuh-wui
-      password: "MyS3cr37P450r.*-"
+      password: k1b4n4#S3rv3r@2025#AP!
       run_as: false

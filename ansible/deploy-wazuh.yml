@@ -3,8 +3,6 @@
   hosts: swarm_manager
   become: yes
   vars:
-    vault_addr: "http://127.0.0.1:8200"
-    vault_token: "myroot"
     domain: "cires-wazuh-yahya.work.gd"
     public_ip: "52.0.98.231"
     wazuh_version: "4.12.0"
@@ -12,8 +10,6 @@
     overlay_network: "wazuh_net"
     certbot_email: "yahyaelourdighi.cyber@gmail.com"
     project_root: "/home/ubuntu/cires-soc-challenge"
-  vars_files:
-    - "{{ project_root }}/ansible/secrets/vault.yml"
 
   pre_tasks:
     - name: Install required packages
@@ -27,11 +23,6 @@
           - python3-pip
           - certbot
           - python3-certbot-nginx
-
-    - name: Install hvac for Vault integration
-      pip:
-        name: hvac
-        executable: /home/ubuntu/wazuh-venv/bin/pip
 
   tasks:
     - name: Initialize Docker Swarm
@@ -88,6 +79,7 @@
         - { src: "{{ project_root }}/configs/wazuh_indexer/wazuh3_indexer.yml", dest: "/etc/wazuh/wazuh3_indexer.yml" }
         - { src: "{{ project_root }}/configs/wazuh_indexer/internal_users.yml", dest: "/etc/wazuh/internal_users.yml" }
         - { src: "{{ project_root }}/stack/wazuh-stack.yml", dest: "/etc/wazuh/wazuh-stack.yml", mode: '0644' }
+        - { src: "{{ project_root }}/configs/filebeat.yml", dest: "/etc/wazuh/filebeat.yml", mode: '0644' }
 
     - name: Copy SSL certificates
       copy:
@@ -112,24 +104,6 @@
         - { src: "{{ project_root }}/configs/wazuh_indexer_ssl_certs/wazuh.worker-key.pem", dest: "/etc/wazuh/certs/wazuh.worker-key.pem" }
         - { src: "{{ project_root }}/configs/wazuh_indexer_ssl_certs/admin.pem", dest: "/etc/wazuh/certs/admin.pem" }
         - { src: "{{ project_root }}/configs/wazuh_indexer_ssl_certs/admin-key.pem", dest: "/etc/wazuh/certs/admin-key.pem" }
-
-    - name: Copy filebeat.yml to temporary location
-      copy:
-        src: /etc/wazuh/filebeat.yml
-        dest: /tmp/filebeat.yml
-        mode: '0644'
-      register: filebeat_copy
-      changed_when: filebeat_copy.changed
-
-    - name: Initialize filebeat.yml in persistent volumes
-      command: |
-        docker run --rm \
-          -v master-filebeat-etc:/etc/filebeat \
-          -v worker-filebeat-etc:/etc/filebeat_worker \
-          -v /tmp/filebeat.yml:/tmp/filebeat.yml \
-          alpine \
-          sh -c "cp /tmp/filebeat.yml /etc/filebeat/filebeat.yml && cp /tmp/filebeat.yml /etc/filebeat_worker/filebeat.yml"
-      when: filebeat_copy.changed
 
     - name: Check if Let's Encrypt certificates exist
       stat:
@@ -186,145 +160,6 @@
         owner: root
         group: root
 
-    - name: Debug /tmp directory permissions
-      command: ls -ld /tmp
-      register: tmp_perms
-      changed_when: false
-
-    - name: Display /tmp permissions
-      debug:
-        msg: "{{ tmp_perms.stdout }}"
-
-    - name: Clean up existing temporary files
-      file:
-        path: "{{ item }}"
-        state: absent
-      loop:
-        - /tmp/indexer_username
-        - /tmp/indexer_password
-        - /tmp/api_username
-        - /tmp/api_password
-        - /tmp/dashboard_username
-        - /tmp/dashboard_password
-
-    - name: Debug existing files in /tmp
-      command: ls -l /tmp/indexer_* /tmp/api_* /tmp/dashboard_*
-      register: tmp_files
-      ignore_errors: true
-      changed_when: false
-
-    - name: Display existing /tmp files
-      debug:
-        msg: "{{ tmp_files.stdout_lines | default(['No files found']) }}"
-
-    - name: Fetch secrets from HashiCorp Vault using CLI
-      ansible.builtin.shell: |
-        export VAULT_ADDR={{ vault_addr }}
-        export VAULT_TOKEN={{ vault_token }}
-        set -e
-        vault kv get secret/wazuh | grep indexer_username | awk '{print $2}' > /tmp/indexer_username
-        vault kv get secret/wazuh | grep indexer_password | awk '{print $2}' > /tmp/indexer_password
-        vault kv get secret/wazuh | grep api_username | awk '{print $2}' > /tmp/api_username
-        vault kv get secret/wazuh | grep api_password | awk '{print $2}' > /tmp/api_password
-        vault kv get secret/wazuh | grep dashboard_username | awk '{print $2}' > /tmp/dashboard_username
-        vault kv get secret/wazuh | grep dashboard_password | awk '{print $2}' > /tmp/dashboard_password
-        chmod 644 /tmp/indexer_username /tmp/indexer_password /tmp/api_username /tmp/api_password /tmp/dashboard_username /tmp/dashboard_password
-      environment:
-        VAULT_ADDR: "{{ vault_addr }}"
-        VAULT_TOKEN: "{{ vault_token }}"
-      changed_when: true
-      register: vault_fetch
-      failed_when: vault_fetch.rc != 0
-
-    - name: Debug Vault fetch output
-      debug:
-        msg: "{{ vault_fetch.stderr_lines }}"
-      when: vault_fetch.rc != 0
-
-    - name: Fetch secrets from HashiCorp Vault using Python (fallback)
-      ansible.builtin.script: |
-        #!/usr/bin/env /home/ubuntu/wazuh-venv/bin/python
-        import hvac
-        client = hvac.Client(url='{{ vault_addr }}', token='{{ vault_token }}')
-        secret = client.secrets.kv.v2.read_secret_version(path='wazuh', mount_point='secret')
-        data = secret['data']['data']
-        with open('/tmp/indexer_username', 'w') as f:
-            f.write(data['indexer_username'] + '\n')
-        with open('/tmp/indexer_password', 'w') as f:
-            f.write(data['indexer_password'] + '\n')
-        with open('/tmp/api_username', 'w') as f:
-            f.write(data['api_username'] + '\n')
-        with open('/tmp/api_password', 'w') as f:
-            f.write(data['api_password'] + '\n')
-        with open('/tmp/dashboard_username', 'w') as f:
-            f.write(data['dashboard_username'] + '\n')
-        with open('/tmp/dashboard_password', 'w') as f:
-            f.write(data['dashboard_password'] + '\n')
-      when: vault_fetch.rc != 0
-      changed_when: true
-      register: vault_python_fetch
-
-    - name: Debug Python Vault fetch output
-      debug:
-        msg: "{{ vault_python_fetch.stderr_lines }}"
-      when: vault_python_fetch.rc is defined and vault_python_fetch.rc != 0
-
-    - name: Set permissions on temporary files (post-Python fetch)
-      file:
-        path: "{{ item }}"
-        mode: '0644'
-      loop:
-        - /tmp/indexer_username
-        - /tmp/indexer_password
-        - /tmp/api_username
-        - /tmp/api_password
-        - /tmp/dashboard_username
-        - /tmp/dashboard_password
-      when: vault_python_fetch.rc is defined and vault_python_fetch.rc == 0
-
-    - name: Verify temporary files have content
-      command: cat {{ item }}
-      loop:
-        - /tmp/indexer_username
-        - /tmp/indexer_password
-        - /tmp/api_username
-        - /tmp/api_password
-        - /tmp/dashboard_username
-        - /tmp/dashboard_password
-      register: file_contents
-      changed_when: false
-      ignore_errors: true
-
-    - name: Debug temporary file contents
-      debug:
-        msg: "{{ item.stdout | default('File not readable or empty') }}"
-      loop: "{{ file_contents.results }}"
-      loop_control:
-        label: "{{ item.item }}"
-
-    - name: Remove existing Docker secrets
-      command: docker secret rm {{ item.name }}
-      loop:
-        - { name: "indexer_username" }
-        - { name: "indexer_password" }
-        - { name: "api_username" }
-        - { name: "api_password" }
-        - { name: "dashboard_username" }
-        - { name: "dashboard_password" }
-      ignore_errors: true
-      changed_when: true
-
-    - name: Create Docker secrets
-      command: docker secret create {{ item.name }} {{ item.file }}
-      loop:
-        - { name: "indexer_username", file: "/tmp/indexer_username" }
-        - { name: "indexer_password", file: "/tmp/indexer_password" }
-        - { name: "api_username", file: "/tmp/api_username" }
-        - { name: "api_password", file: "/tmp/api_password" }
-        - { name: "dashboard_username", file: "/tmp/dashboard_username" }
-        - { name: "dashboard_password", file: "/tmp/dashboard_password" }
-      changed_when: true
-
     - name: Remove any existing Wazuh stack
       command: docker stack rm {{ stack_name }}
       ignore_errors: true
@@ -362,19 +197,6 @@
         weekday: "*"
       changed_when: true
 
-    - name: Clean up temporary files
-      file:
-        path: "{{ item }}"
-        state: absent
-      loop:
-        - /tmp/indexer_username
-        - /tmp/indexer_password
-        - /tmp/api_username
-        - /tmp/api_password
-        - /tmp/dashboard_username
-        - /tmp/dashboard_password
-        - /tmp/filebeat.yml
-
   post_tasks:
     - name: Wait for Wazuh dashboard to be ready
       uri:
@@ -395,7 +217,7 @@
 
           Access URLs:
           - Wazuh Dashboard: https://{{ domain }}
-          - Wazuh API: https://{{ domain }}/api
+          - Wazuh API: https://{{ domain }}:55000
 
           Service Status: {{ 'Ready' if dashboard_check.status in [200, 302] else 'Starting (may take a few more minutes)' }}
 

@@ -33,7 +33,7 @@ services:
       - SSL_CERTIFICATE=/etc/ssl/filebeat.pem
       - SSL_KEY=/etc/ssl/filebeat-key.pem
       - API_USERNAME=wazuh-wui
-      - API_PASSWORD=MyS3cr37P450r.*-
+      - API_PASSWORD=k1b4n4#S3rv3r@2025#AP!
     volumes:
       - master-wazuh-api-configuration:/var/ossec/api/configuration
       - master-wazuh-etc:/var/ossec/etc
@@ -59,7 +59,7 @@ services:
       - wazuh2-indexer
       - wazuh3-indexer
     healthcheck:
-      test: ["CMD", "curl", "-s", "-k", "-u", "wazuh-wui:MyS3cr37P450r.*-", "https://localhost:55000"]
+      test: ["CMD", "curl", "-s", "-k", "-u", "wazuh-wui:k1b4n4#S3rv3r@2025#AP!", "https://localhost:55000"]
       interval: 15s
       timeout: 10s
       retries: 10
@@ -108,7 +108,7 @@ services:
       - wazuh2-indexer
       - wazuh3-indexer
     healthcheck:
-      test: ["CMD", "curl", "-s", "-k", "-u", "wazuh-wui:MyS3cr37P450r.*-", "https://localhost:55000"]
+      test: ["CMD", "curl", "-s", "-k", "-u", "wazuh-wui:k1b4n4#S3rv3r@2025#AP!", "https://localhost:55000"]
       interval: 15s
       timeout: 10s
       retries: 10
@@ -271,7 +271,7 @@ services:
       - DASHBOARD_USERNAME=kibanaserver
       - DASHBOARD_PASSWORD=kibanaserver
       - API_USERNAME=wazuh-wui
-      - API_PASSWORD=MyS3cr37P450r.*-
+      - API_PASSWORD=k1b4n4#S3rv3r@2025#AP!
     volumes:
       - /etc/wazuh/certs/wazuh-dashboard.pem:/usr/share/wazuh-dashboard/certs/wazuh-dashboard.pem:ro
       - /etc/wazuh/certs/wazuh-dashboard-key.pem:/usr/share/wazuh-dashboard/certs/wazuh-dashboard-key.pem:ro
