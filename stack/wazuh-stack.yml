@@ -26,6 +26,9 @@ services:
       - target: 55000
         published: 55000
         mode: host
+      - target: 1514
+        published: 1514
+        mode: host
     environment:
       - INDEXER_URL=https://wazuh1-indexer:9200,https://wazuh2-indexer:9200,https://wazuh3-indexer:9200
       - FILEBEAT_SSL_VERIFICATION_MODE=full
@@ -276,8 +279,8 @@ services:
       - /etc/wazuh/certs/wazuh-dashboard.pem:/usr/share/wazuh-dashboard/certs/wazuh-dashboard.pem:ro
       - /etc/wazuh/certs/wazuh-dashboard-key.pem:/usr/share/wazuh-dashboard/certs/wazuh-dashboard-key.pem:ro
       - /etc/wazuh/certs/root-ca.pem:/usr/share/wazuh-dashboard/certs/root-ca.pem:ro
-      - /etc/wazuh/opensearch_dashboards.yml:/usr/share/wazuh-dashboard/config/opensearch_dashboards.yml:ro
-      - /etc/wazuh/wazuh.yml:/usr/share/wazuh-dashboard/data/wazuh/config/wazuh.yml:ro
+      - /etc/wazuh/opensearch_dashboards.yml:/usr/share/wazuh-dashboard/config/opensearch_dashboards.yml
+      - /etc/wazuh/wazuh.yml:/usr/share/wazuh-dashboard/data/wazuh/config/wazuh.yml
       - wazuh-dashboard-config:/usr/share/wazuh-dashboard/data/wazuh/config
       - wazuh-dashboard-custom:/usr/share/wazuh-dashboard/plugins/wazuh/public/assets/custom
     networks:
