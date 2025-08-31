@@ -14,37 +14,7 @@ The Wazuh stack consists of:
 The stack runs on a Docker Swarm cluster with an overlay network (`wazuh_net`). Data persistence is achieved using Docker volumes for indexer data, manager configurations, and dashboard settings. HTTPS is secured with Let's Encrypt certificates, and internal communications use self-signed certificates from a root CA.
 
 ### Architecture Diagram
-
-```mermaid
-graph TD
-    A[GitHub Actions] -->|Push/PR| B[Self-Hosted Runner]
-    B -->|Build| C[Custom Nginx Image]
-    B -->|Scan| D[Trivy]
-    B -->|Test| E[Selenium + API Tests]
-    B -->|Deploy| F[Ansible]
-    F --> G[Docker Swarm]
-    G --> H[Wazuh Master]
-    G --> I[Wazuh Worker]
-    G --> J[Wazuh Indexer 1]
-    G --> K[Wazuh Indexer 2]
-    G --> L[Wazuh Indexer 3]
-    G --> M[Wazuh Dashboard]
-    G --> N[Nginx (HTTPS)]
-    N -->|Proxy| M
-    O[HashiCorp Vault] -->|Secrets| F
-    P[Let's Encrypt] -->|Certificates| N
-    subgraph Docker Swarm
-        H -->|Overlay Network| J
-        H -->|Overlay Network| K
-        H -->|Overlay Network| L
-        I -->|Overlay Network| J
-        I -->|Overlay Network| K
-        I -->|Overlay Network| L
-        M -->|Overlay Network| J
-        M -->|Overlay Network| K
-        M -->|Overlay Network| L
-    end
-```
+![full-diagram](https://github.com/user-attachments/assets/ad5ea198-5ab2-413b-89df-4c8d82753762)
 
 ## Prerequisites
 
