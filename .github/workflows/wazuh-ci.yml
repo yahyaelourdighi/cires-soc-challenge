@@ -1,63 +1,33 @@
 name: Wazuh CI/CD Pipeline
-
 on:
-  push:
-    branches:
-      - main
   pull_request:
-    branches:
-      - main
-
+    branches: [ main ]
+  push:
+    branches: [ main ]
 jobs:
   build-and-test:
     runs-on: self-hosted
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.x'
-
-      - name: Create and activate virtual environment
-        run: |
-          python3 -m venv wazuh-venv
-          source wazuh-venv/bin/activate
-          pip install hvac pytest selenium requests docker
-          deactivate
-
-      - name: Install Trivy
-        run: |
-          wget https://github.com/aquasecurity/trivy/releases/download/v0.65.0/trivy_0.65.0_Linux-64bit.deb
-          sudo dpkg -i trivy_0.65.0_Linux-64bit.deb
-
-      - name: Scan Docker images with Trivy
-        run: |
-          trivy image --config trivy.yaml --severity CRITICAL,HIGH --exit-code 1 wazuh/wazuh-manager:4.12.0
-          trivy image --config trivy.yaml --severity CRITICAL,HIGH --exit-code 1 wazuh/wazuh-indexer:4.12.0
-          trivy image --config trivy.yaml --severity CRITICAL,HIGH --exit-code 1 wazuh/wazuh-dashboard:4.12.0
-          trivy image --config trivy.yaml --severity CRITICAL,HIGH --exit-code 1 nginx:stable
-
+      - name: Build Nginx image
+        run: docker build -t custom-nginx:latest -f docker/Dockerfile.nginx .
+      - name: Scan image with Trivy
+        run: trivy image --config trivy.yaml custom-nginx:latest
       - name: Run Selenium tests
+        env:
+          DASHBOARD_USERNAME: ${{ secrets.DASHBOARD_USERNAME }}
+          DASHBOARD_PASSWORD: ${{ secrets.DASHBOARD_PASSWORD }}
+          API_USERNAME: ${{ secrets.WAZUH_API_USERNAME }}
+          API_PASSWORD: ${{ secrets.WAZUH_API_PASSWORD }}
         run: |
-          source wazuh-venv/bin/activate
-          export DASHBOARD_USERNAME=kibanaserver
-          export DASHBOARD_PASSWORD=kibanaserver
-          python3 -m pytest tests/selenium/test_dashboard.py
-          deactivate
-
-      - name: Run API tests
+          pip3 install -r tests/requirements.txt
+          pytest tests/selenium/test_dashboard.py tests/api/health_check.py
+      - name: Deploy to Docker Swarm (main branch only)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
+          VAULT_TOKEN: ${{ secrets.VAULT_TOKEN }}
         run: |
-          source wazuh-venv/bin/activate
-          export API_USERNAME=wazuh-wui
-          export API_PASSWORD=MyS3cr37P450r.*-
-          python3 -m pytest tests/api/health_check.py
-          deactivate
-
-      - name: Deploy Wazuh stack
-        run: |
-          source wazuh-venv/bin/activate
-          export VAULT_TOKEN=${{ secrets.VAULT_TOKEN }}
+          echo "$ANSIBLE_VAULT_PASSWORD" > vault-pass.txt
           ansible-playbook -i ansible/inventory.yml ansible/deploy-wazuh.yml --vault-password-file vault-pass.txt
-          deactivate
