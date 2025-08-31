@@ -11,10 +11,10 @@ services:
       resources:
         limits:
           cpus: '1.0'
-          memory: 4G
+          memory: 6G
         reservations:
           cpus: '0.5'
-          memory: 2G
+          memory: 3G
     ports:
       - target: 1515
         published: 1515
@@ -33,10 +33,13 @@ services:
       - INDEXER_URL=https://wazuh1-indexer:9200,https://wazuh2-indexer:9200,https://wazuh3-indexer:9200
       - FILEBEAT_SSL_VERIFICATION_MODE=full
       - SSL_CERTIFICATE_AUTHORITIES=/etc/ssl/root-ca.pem
-      - SSL_CERTIFICATE=/etc/ssl/filebeat.pem
-      - SSL_KEY=/etc/ssl/filebeat-key.pem
-      - API_USERNAME=wazuh-wui
-      - API_PASSWORD=k1b4n4#S3rv3r@2025#AP!
+      - SSL_CERTIFICATE=/etc/ssl/wazuh-master.pem
+      - SSL_KEY=/etc/ssl/wazuh-master-key.pem
+    secrets:
+      - wazuh_api_username
+      - wazuh_api_password
+      - filebeat_username
+      - filebeat_password
     volumes:
       - master-wazuh-api-configuration:/var/ossec/api/configuration
       - master-wazuh-etc:/var/ossec/etc
@@ -49,12 +52,22 @@ services:
       - master-wazuh-wodles:/var/ossec/wodles
       - master-filebeat-etc:/etc/filebeat
       - master-filebeat-var:/var/lib/filebeat
-      - /etc/wazuh/certs/root-ca.pem:/etc/ssl/root-ca.pem:ro
-      - /etc/wazuh/certs/filebeat.pem:/etc/ssl/filebeat.pem:ro
-      - /etc/wazuh/certs/filebeat-key.pem:/etc/ssl/filebeat-key.pem:ro
-      - /etc/wazuh/certs/wazuh-master.pem:/etc/ssl/wazuh-master.pem:ro
-      - /etc/wazuh/certs/wazuh-master-key.pem:/etc/ssl/wazuh-master-key.pem:ro
+      - /etc/wazuh/certs:/etc/ssl:ro
       - /etc/wazuh/wazuh_manager.conf:/wazuh-config-mount/etc/ossec.conf:ro
+      - /etc/wazuh/filebeat.yml:/etc/filebeat/filebeat.yml
+      - /tmp/wazuh-template.json:/etc/filebeat/wazuh-template.json:ro
+    cap_add:
+      - SYS_NICE
+      - SYS_RESOURCE
+      - SYS_ADMIN
+      - SYS_PTRACE
+    security_opt:
+      - seccomp:unconfined
+    ulimits:
+      nproc: 65535
+      nofile:
+        soft: 65536
+        hard: 65536
     networks:
       - wazuh_net
     depends_on:
@@ -62,11 +75,11 @@ services:
       - wazuh2-indexer
       - wazuh3-indexer
     healthcheck:
-      test: ["CMD", "curl", "-s", "-k", "-u", "wazuh-wui:k1b4n4#S3rv3r@2025#AP!", "https://localhost:55000"]
+      test: ["CMD", "curl", "-s", "-k", "-u", "{{ .Secrets.wazuh_api_username }}:{{ .Secrets.wazuh_api_password }}", "https://localhost:55000"]
       interval: 15s
       timeout: 10s
       retries: 10
-      start_period: 120s
+      start_period: 300s
 
   wazuh-worker:
     image: wazuh/wazuh-manager:4.12.0
@@ -76,16 +89,21 @@ services:
       resources:
         limits:
           cpus: '1.0'
-          memory: 4G
+          memory: 6G
         reservations:
           cpus: '0.5'
-          memory: 2G
+          memory: 3G
     environment:
       - INDEXER_URL=https://wazuh1-indexer:9200,https://wazuh2-indexer:9200,https://wazuh3-indexer:9200
       - FILEBEAT_SSL_VERIFICATION_MODE=full
       - SSL_CERTIFICATE_AUTHORITIES=/etc/ssl/root-ca.pem
-      - SSL_CERTIFICATE=/etc/ssl/filebeat.pem
-      - SSL_KEY=/etc/ssl/filebeat-key.pem
+      - SSL_CERTIFICATE=/etc/ssl/wazuh-worker.pem
+      - SSL_KEY=/etc/ssl/wazuh-worker-key.pem
+    secrets:
+      - wazuh_api_username
+      - wazuh_api_password
+      - filebeat_username
+      - filebeat_password
     volumes:
       - worker-wazuh-api-configuration:/var/ossec/api/configuration
       - worker-wazuh-etc:/var/ossec/etc
@@ -98,12 +116,22 @@ services:
       - worker-wazuh-wodles:/var/ossec/wodles
       - worker-filebeat-etc:/etc/filebeat
       - worker-filebeat-var:/var/lib/filebeat
-      - /etc/wazuh/certs/root-ca.pem:/etc/ssl/root-ca.pem:ro
-      - /etc/wazuh/certs/filebeat.pem:/etc/ssl/filebeat.pem:ro
-      - /etc/wazuh/certs/filebeat-key.pem:/etc/ssl/filebeat-key.pem:ro
-      - /etc/wazuh/certs/wazuh-worker.pem:/etc/ssl/wazuh-worker.pem:ro
-      - /etc/wazuh/certs/wazuh-worker-key.pem:/etc/ssl/wazuh-worker-key.pem:ro
+      - /etc/wazuh/certs:/etc/ssl:ro
       - /etc/wazuh/wazuh_worker.conf:/wazuh-config-mount/etc/ossec.conf:ro
+      # - /etc/wazuh/filebeat-worker.yml:/etc/filebeat/filebeat.yml
+      # - /etc/wazuh/wazuh-template.json:/etc/filebeat/wazuh-template.json:ro
+    cap_add:
+      - SYS_NICE
+      - SYS_RESOURCE
+      - SYS_ADMIN
+      - SYS_PTRACE
+    security_opt:
+      - seccomp:unconfined
+    ulimits:
+      nproc: 65535
+      nofile:
+        soft: 65536
+        hard: 65536
     networks:
       - wazuh_net
     depends_on:
@@ -111,11 +139,11 @@ services:
       - wazuh2-indexer
       - wazuh3-indexer
     healthcheck:
-      test: ["CMD", "curl", "-s", "-k", "-u", "wazuh-wui:k1b4n4#S3rv3r@2025#AP!", "https://localhost:55000"]
+      test: ["CMD", "curl", "-s", "-k", "-u", "{{ .Secrets.wazuh_api_username }}:{{ .Secrets.wazuh_api_password }}", "https://localhost:55000"]
       interval: 15s
       timeout: 10s
       retries: 10
-      start_period: 120s
+      start_period: 300s
 
   wazuh1-indexer:
     image: wazuh/wazuh-indexer:4.12.0
@@ -140,6 +168,9 @@ services:
       - OPENSEARCH_JAVA_OPTS=-Xms2g -Xmx2g
       - bootstrap.memory_lock=true
       - OPENSEARCH_PATH_CONF=/usr/share/wazuh-indexer
+    secrets:
+      - indexer_username
+      - indexer_password
     ulimits:
       memlock:
         soft: -1
@@ -149,21 +180,17 @@ services:
         hard: 65536
     volumes:
       - wazuh-indexer-data-1:/var/lib/wazuh-indexer
-      - /etc/wazuh/certs/root-ca.pem:/usr/share/wazuh-indexer/certs/root-ca.pem:ro
-      - /etc/wazuh/certs/wazuh1-indexer.pem:/usr/share/wazuh-indexer/certs/wazuh1-indexer.pem:ro
-      - /etc/wazuh/certs/wazuh1-indexer-key.pem:/usr/share/wazuh-indexer/certs/wazuh1-indexer-key.pem:ro
-      - /etc/wazuh/certs/admin.pem:/usr/share/wazuh-indexer/certs/admin.pem:ro
-      - /etc/wazuh/certs/admin-key.pem:/usr/share/wazuh-indexer/certs/admin-key.pem:ro
+      - /etc/wazuh/certs:/usr/share/wazuh-indexer/certs:ro
       - /etc/wazuh/wazuh1_indexer.yml:/usr/share/wazuh-indexer/opensearch.yml:ro
       - /etc/wazuh/internal_users.yml:/usr/share/wazuh-indexer/opensearch-security/internal_users.yml:ro
     networks:
       - wazuh_net
     healthcheck:
-      test: ["CMD", "curl", "-s", "-k", "-u", "logstash:logstash", "https://localhost:9200"]
+      test: ["CMD", "curl", "-s", "-k", "-u", "{{ .Secrets.indexer_username }}:{{ .Secrets.indexer_password }}", "https://localhost:9200"]
       interval: 15s
       timeout: 10s
       retries: 10
-      start_period: 120s
+      start_period: 600s
 
   wazuh2-indexer:
     image: wazuh/wazuh-indexer:4.12.0
@@ -181,6 +208,9 @@ services:
       - OPENSEARCH_JAVA_OPTS=-Xms2g -Xmx2g
       - bootstrap.memory_lock=true
       - OPENSEARCH_PATH_CONF=/usr/share/wazuh-indexer
+    secrets:
+      - indexer_username
+      - indexer_password
     ulimits:
       memlock:
         soft: -1
@@ -190,21 +220,17 @@ services:
         hard: 65536
     volumes:
       - wazuh-indexer-data-2:/var/lib/wazuh-indexer
-      - /etc/wazuh/certs/root-ca.pem:/usr/share/wazuh-indexer/certs/root-ca.pem:ro
-      - /etc/wazuh/certs/wazuh2-indexer.pem:/usr/share/wazuh-indexer/certs/wazuh2-indexer.pem:ro
-      - /etc/wazuh/certs/wazuh2-indexer-key.pem:/usr/share/wazuh-indexer/certs/wazuh2-indexer-key.pem:ro
-      - /etc/wazuh/certs/admin.pem:/usr/share/wazuh-indexer/certs/admin.pem:ro
-      - /etc/wazuh/certs/admin-key.pem:/usr/share/wazuh-indexer/certs/admin-key.pem:ro
+      - /etc/wazuh/certs:/usr/share/wazuh-indexer/certs:ro
       - /etc/wazuh/wazuh2_indexer.yml:/usr/share/wazuh-indexer/opensearch.yml:ro
       - /etc/wazuh/internal_users.yml:/usr/share/wazuh-indexer/opensearch-security/internal_users.yml:ro
     networks:
       - wazuh_net
     healthcheck:
-      test: ["CMD", "curl", "-s", "-k", "-u", "logstash:logstash", "https://localhost:9200"]
+      test: ["CMD", "curl", "-s", "-k", "-u", "{{ .Secrets.indexer_username }}:{{ .Secrets.indexer_password }}", "https://localhost:9200"]
       interval: 15s
       timeout: 10s
       retries: 10
-      start_period: 120s
+      start_period: 600s
 
   wazuh3-indexer:
     image: wazuh/wazuh-indexer:4.12.0
@@ -222,6 +248,9 @@ services:
       - OPENSEARCH_JAVA_OPTS=-Xms2g -Xmx2g
       - bootstrap.memory_lock=true
       - OPENSEARCH_PATH_CONF=/usr/share/wazuh-indexer
+    secrets:
+      - indexer_username
+      - indexer_password
     ulimits:
       memlock:
         soft: -1
@@ -231,21 +260,17 @@ services:
         hard: 65536
     volumes:
       - wazuh-indexer-data-3:/var/lib/wazuh-indexer
-      - /etc/wazuh/certs/root-ca.pem:/usr/share/wazuh-indexer/certs/root-ca.pem:ro
-      - /etc/wazuh/certs/wazuh3-indexer.pem:/usr/share/wazuh-indexer/certs/wazuh3-indexer.pem:ro
-      - /etc/wazuh/certs/wazuh3-indexer-key.pem:/usr/share/wazuh-indexer/certs/wazuh3-indexer-key.pem:ro
-      - /etc/wazuh/certs/admin.pem:/usr/share/wazuh-indexer/certs/admin.pem:ro
-      - /etc/wazuh/certs/admin-key.pem:/usr/share/wazuh-indexer/certs/admin-key.pem:ro
+      - /etc/wazuh/certs:/usr/share/wazuh-indexer/certs:ro
       - /etc/wazuh/wazuh3_indexer.yml:/usr/share/wazuh-indexer/opensearch.yml:ro
       - /etc/wazuh/internal_users.yml:/usr/share/wazuh-indexer/opensearch-security/internal_users.yml:ro
     networks:
       - wazuh_net
     healthcheck:
-      test: ["CMD", "curl", "-s", "-k", "-u", "logstash:logstash", "https://localhost:9200"]
+      test: ["CMD", "curl", "-s", "-k", "-u", "{{ .Secrets.indexer_username }}:{{ .Secrets.indexer_password }}", "https://localhost:9200"]
       interval: 15s
       timeout: 10s
       retries: 10
-      start_period: 120s
+      start_period: 600s
 
   wazuh-dashboard:
     image: wazuh/wazuh-dashboard:4.12.0
@@ -267,20 +292,19 @@ services:
         published: 5601
         mode: host
     environment:
-      - OPENSEARCH_HOSTS=https://wazuh1-indexer:9200,https://wazuh2-indexer:9200,https://wazuh3-indexer:9200
+      - OPENSEARCH_HOSTS=https://wazuh1-indexer:9200 https://wazuh2-indexer:9200 https://wazuh3-indexer:9200
       - WAZUH_API_URL=https://wazuh-master:55000
-      - INDEXER_USERNAME=admin
-      - INDEXER_PASSWORD=SecretPassword
-      - DASHBOARD_USERNAME=kibanaserver
-      - DASHBOARD_PASSWORD=kibanaserver
-      - API_USERNAME=wazuh-wui
-      - API_PASSWORD=k1b4n4#S3rv3r@2025#AP!
+    secrets:
+      - indexer_username
+      - indexer_password
+      - dashboard_username
+      - dashboard_password
+      - wazuh_api_username
+      - wazuh_api_password
     volumes:
-      - /etc/wazuh/certs/wazuh-dashboard.pem:/usr/share/wazuh-dashboard/certs/wazuh-dashboard.pem:ro
-      - /etc/wazuh/certs/wazuh-dashboard-key.pem:/usr/share/wazuh-dashboard/certs/wazuh-dashboard-key.pem:ro
-      - /etc/wazuh/certs/root-ca.pem:/usr/share/wazuh-dashboard/certs/root-ca.pem:ro
-      - /etc/wazuh/opensearch_dashboards.yml:/usr/share/wazuh-dashboard/config/opensearch_dashboards.yml
-      - /etc/wazuh/wazuh.yml:/usr/share/wazuh-dashboard/data/wazuh/config/wazuh.yml
+      - /etc/wazuh/certs:/usr/share/wazuh-dashboard/certs:ro
+      - /etc/wazuh/opensearch_dashboards.yml:/usr/share/wazuh-dashboard/config/opensearch_dashboards.yml:ro
+      - /etc/wazuh/wazuh.yml:/usr/share/wazuh-dashboard/data/wazuh/config/wazuh.yml:ro
       - wazuh-dashboard-config:/usr/share/wazuh-dashboard/data/wazuh/config
       - wazuh-dashboard-custom:/usr/share/wazuh-dashboard/plugins/wazuh/public/assets/custom
     networks:
@@ -291,11 +315,11 @@ services:
       - wazuh3-indexer
       - wazuh-master
     healthcheck:
-      test: ["CMD", "curl", "-s", "-k", "-u", "kibanaserver:kibanaserver", "https://localhost:5601"]
+      test: ["CMD", "curl", "-s", "-k", "-u", "{{ .Secrets.dashboard_username }}:{{ .Secrets.dashboard_password }}", "https://localhost:5601"]
       interval: 15s
       timeout: 10s
-      retries: 15
-      start_period: 120s
+      retries: 10
+      start_period: 600s
 
   nginx:
     image: nginx:stable
@@ -323,20 +347,41 @@ services:
       - /etc/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - /etc/letsencrypt/live/cires-wazuh-yahya.work.gd:/etc/letsencrypt/live/cires-wazuh-yahya.work.gd:ro
       - /etc/letsencrypt/archive/cires-wazuh-yahya.work.gd:/etc/letsencrypt/archive/cires-wazuh-yahya.work.gd:ro
+    secrets:
+      - dashboard_username
+      - dashboard_password
     networks:
       - wazuh_net
     depends_on:
       - wazuh-dashboard
       - wazuh-master
     healthcheck:
-      test: ["CMD", "curl", "-s", "-k", "-f", "-u", "kibanaserver:kibanaserver", "https://wazuh-dashboard:5601"]
+      test: ["CMD", "curl", "-s", "-k", "-f", "-u", "{{ .Secrets.dashboard_username }}:{{ .Secrets.dashboard_password }}", "https://wazuh-dashboard:5601"]
       interval: 15s
-      timeout: 10s
-      retries: 15
-      start_period: 120s
+      timeout: 30s
+      retries: 20
+      start_period: 1200s
 
 networks:
   wazuh_net:
+    external: true
+
+secrets:
+  wazuh_api_username:
+    external: true
+  wazuh_api_password:
+    external: true
+  indexer_username:
+    external: true
+  indexer_password:
+    external: true
+  dashboard_username:
+    external: true
+  dashboard_password:
+    external: true
+  filebeat_username:
+    external: true
+  filebeat_password:
     external: true
 
 volumes:
