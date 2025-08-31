@@ -10,6 +10,13 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+      - name: Install linting tools
+        run: |
+          pip3 install ansible-lint yamllint
+      - name: Run ansible-lint
+        run: ansible-lint ansible/deploy-wazuh.yml
+      - name: Run yamllint
+        run: yamllint -c .yamllint ansible/ configs/ stack/ trivy.yaml
       - name: Build Nginx image
         run: docker build -t custom-nginx:latest -f docker/Dockerfile.nginx .
       - name: Scan image with Trivy
