@@ -1,0 +1,185 @@
+# Wazuh Mini SOC Deployment
+
+This project deploys a Wazuh Security Information and Event Management (SIEM) system on a Docker Swarm cluster using a CI/CD pipeline with GitHub Actions and self-hosted runners. The pipeline builds, scans, tests, and deploys the Wazuh stack, ensuring security, reliability, and reproducibility.
+
+## Architecture Overview
+
+The Wazuh stack consists of:
+- **Wazuh Indexer**: Three nodes (`wazuh1-indexer`, `wazuh2-indexer`, `wazuh3-indexer`) for indexing and storing security events, running `wazuh/wazuh-indexer:4.12.0`.
+- **Wazuh Manager**: Two nodes (`wazuh-master`, `wazuh-worker`) for event processing and analysis, running `wazuh/wazuh-manager:4.12.0`.
+- **Wazuh Dashboard**: A single node for visualization, running `wazuh/wazuh-dashboard:4.12.0`.
+- **Nginx**: A reverse proxy (`nginx:stable`) to terminate HTTPS and route traffic to the dashboard.
+- **HashiCorp Vault**: Manages secrets for Wazuh credentials and API keys.
+
+The stack runs on a Docker Swarm cluster with an overlay network (`wazuh_net`). Data persistence is achieved using Docker volumes for indexer data, manager configurations, and dashboard settings. HTTPS is secured with Let's Encrypt certificates, and internal communications use self-signed certificates from a root CA.
+
+### Architecture Diagram
+
+```mermaid
+graph TD
+    A[GitHub Actions] -->|Push/PR| B[Self-Hosted Runner]
+    B -->|Build| C[Custom Nginx Image]
+    B -->|Scan| D[Trivy]
+    B -->|Test| E[Selenium + API Tests]
+    B -->|Deploy| F[Ansible]
+    F --> G[Docker Swarm]
+    G --> H[Wazuh Master]
+    G --> I[Wazuh Worker]
+    G --> J[Wazuh Indexer 1]
+    G --> K[Wazuh Indexer 2]
+    G --> L[Wazuh Indexer 3]
+    G --> M[Wazuh Dashboard]
+    G --> N[Nginx (HTTPS)]
+    N -->|Proxy| M
+    O[HashiCorp Vault] -->|Secrets| F
+    P[Let's Encrypt] -->|Certificates| N
+    subgraph Docker Swarm
+        H -->|Overlay Network| J
+        H -->|Overlay Network| K
+        H -->|Overlay Network| L
+        I -->|Overlay Network| J
+        I -->|Overlay Network| K
+        I -->|Overlay Network| L
+        M -->|Overlay Network| J
+        M -->|Overlay Network| K
+        M -->|Overlay Network| L
+    end
+```
+
+## Prerequisites
+
+### Self-Hosted Runner Setup
+The CI/CD pipeline requires a self-hosted Linux runner (Ubuntu-based) with the following tools:
+- **Docker**: Latest stable version (e.g., 20.10 or higher, `docker.io` package).
+- **Ansible**: Version 2.9 or higher (`ansible-core`).
+- **Python**: Version 3.8 or higher with `pip3`.
+- **Trivy**: Latest version for container image scanning.
+- **Chrome/Chromedriver**: Chrome browser and compatible Chromedriver for Selenium tests.
+- **Linting Tools**: `ansible-lint` and `yamllint` for code quality checks.
+- **Additional Packages**: `certbot`, `python3-certbot-nginx`, `python3-docker`.
+
+Install dependencies with:
+```bash
+sudo apt update
+sudo apt install -y docker.io python3-pip python3-docker certbot python3-certbot-nginx
+pip3 install ansible ansible-lint yamllint
+curl -fsSL https://github.com/aquasecurity/trivy/releases/latest/download/trivy_*.deb -o trivy.deb
+sudo dpkg -i trivy.deb
+sudo apt install -y chromium-browser chromium-chromedriver
+```
+
+### Additional Requirements
+- **DNS**: A domain (`cires-wazuh-yahya.work.gd`) pointing to the public IP (`52.0.98.231`).
+- **HashiCorp Vault**: Running on `http://127.0.0.1:8200` with secrets stored at `secret/wazuh`.
+- **SSH Access**: Runner must have SSH access to the Swarm manager (`52.0.98.231`) with key `~/.ssh/id_ed25519`.
+- **GitHub Secrets**: Configure `ANSIBLE_VAULT_PASSWORD`, `VAULT_TOKEN`, `DASHBOARD_USERNAME`, `DASHBOARD_PASSWORD`, `WAZUH_API_USERNAME`, `WAZUH_API_PASSWORD`, `READALL_USERNAME`, and `READALL_PASSWORD`.
+
+## Running Locally
+
+1. **Clone the Repository**:
+   ```bash
+   git clone <repository-url>
+   cd cires-soc-challenge
+   ```
+
+2. **Set Up HashiCorp Vault**:
+   - Initialize Vault and store secrets:
+     ```bash
+     vault kv put secret/wazuh \
+       wazuh_api_username=<username> \
+       wazuh_api_password=<password> \
+       indexer_username=<username> \
+       indexer_password=<password> \
+       dashboard_username=<username> \
+       dashboard_password=<password> \
+       filebeat_username=<username> \
+       filebeat_password=<password>
+     ```
+   - Export the Vault token:
+     ```bash
+     export VAULT_TOKEN=<vault-token>
+     ```
+
+3. **Run Ansible Playbook**:
+   ```bash
+   echo "<ansible-vault-password>" > secrets/vault-pass.txt
+   ansible-playbook -i ansible/inventory.yml ansible/deploy-wazuh.yml --vault-password-file secrets/vault-pass.txt
+   ```
+
+4. **Access the Dashboard**:
+   - URL: `https://cires-wazuh-yahya.work.gd`
+   - API: `https://cires-wazuh-yahya.work.gd:55000`
+   - Use credentials from Vault (e.g., `dashboard_username`, `dashboard_password`).
+
+## Running via CI
+
+1. **Configure GitHub Secrets**:
+   - In the GitHub repository, go to Settings > Secrets and variables > Actions.
+   - Add secrets: `ANSIBLE_VAULT_PASSWORD`, `VAULT_TOKEN`, `DASHBOARD_USERNAME`, `DASHBOARD_PASSWORD`, `WAZUH_API_USERNAME`, `WAZUH_API_PASSWORD`, `READALL_USERNAME`, `READALL_PASSWORD`.
+
+2. **Push or Create PR**:
+   - Push to `main` or create a pull request to trigger the pipeline (`.github/workflows/wazuh-ci.yml`).
+   - The pipeline will:
+     - Build the Nginx image.
+     - Scan it with Trivy (fails on CRITICAL/HIGH vulnerabilities).
+     - Deploy a test stack and run Selenium/API tests.
+     - Remove the test stack using `ansible/teardown.yml`.
+     - Deploy to production Swarm on `main` push.
+
+3. **Monitor Pipeline**:
+   - Check the GitHub Actions tab for pipeline status.
+   - View logs and artifacts (e.g., Trivy reports) in the Actions UI.
+
+## Secrets and TLS Management
+
+### Secrets
+- **Storage**: Secrets (Wazuh credentials, API keys) are stored in HashiCorp Vault at `secret/wazuh`. The Ansible playbook fetches them using `VAULT_TOKEN`.
+- **Docker Secrets**: Secrets are created as Docker Swarm secrets (`wazuh_api_username`, `indexer_password`, etc.) and mounted to containers.
+- **Ansible Vault**: Sensitive variables are encrypted in `ansible/group_vars/all.yml` and `ansible/inventory.yml` using the password in `secrets/vault-pass.txt`.
+- **Rotation**:
+  - Update Vault secrets:
+    ```bash
+    vault kv put secret/wazuh wazuh_api_username=<new-username> wazuh_api_password=<new-password> ...
+    ```
+  - Restart services:
+    ```bash
+    docker service update --force wazuh_wazuh-master wazuh_wazuh-dashboard
+    ```
+- **Least Privilege**: Uses `kibanaro` (read-only) for testing and restricts file permissions (e.g., `0600` for private keys).
+
+### TLS Certificates
+- **Let's Encrypt**: Certificates for `cires-wazuh-yahya.work.gd` are obtained via Certbot and stored in `/etc/letsencrypt/live/cires-wazuh-yahya.work.gd`. A cron job (`certbot renew`) runs twice daily, updating the Nginx service on renewal.
+- **Internal CA**: Self-signed certificates for Wazuh components are generated with `openssl` and stored in `/etc/wazuh/certs`. The root CA (`root-ca.pem`) is trusted by mounting it to containers.
+- **Trust Setup**:
+  ```bash
+  sudo cp /etc/wazuh/certs/root-ca.pem /usr/local/share/ca-certificates/wazuh-root-ca.crt
+  sudo update-ca-certificates
+  ```
+- **Rotation**:
+  - Regenerate certificates:
+    ```bash
+    openssl genrsa -out new-key.pem 2048
+    openssl req -new -key new-key.pem -out new.csr
+    ```
+  - Update Vault and Swarm secrets:
+    ```bash
+    vault kv put secret/wazuh/tls new-key=@new-key.pem
+    docker secret rm wazuh_api_password && docker secret create wazuh_api_password new-key.pem
+    ```
+
+## Rollback and Recovery
+
+- **Rollback**: The Ansible playbook backs up the stack configuration (`/etc/wazuh/wazuh-stack.yml.bak`) before deployment. On failure, it redeploys the backup:
+  ```bash
+  docker stack deploy -c /etc/wazuh/wazuh-stack.yml.bak wazuh
+  ```
+- **Recovery**:
+  - Check service logs: `docker service logs wazuh_nginx`
+  - Verify secrets: `docker secret ls`
+  - Test Nginx config: `docker run --rm -v $(pwd)/configs/nginx.conf:/etc/nginx/nginx.conf:ro nginx:stable nginx -t`
+  - Check certificates: `ls -l /etc/letsencrypt/live/cires-wazuh-yahya.work.gd`
+  - Redeploy: `ansible-playbook -i ansible/inventory.yml ansible/deploy-wazuh.yml --vault-password-file secrets/vault-pass.txt`
+  - Remove stack if needed: `ansible-playbook -i ansible/inventory.yml ansible/teardown.yml --vault-password-file secrets/vault-pass.txt`
+
+## Troubleshooting
+See `docs/troubleshooting.md` for common issues and solutions, including Nginx failures, secret validation, certificate checks, and vault password file errors.

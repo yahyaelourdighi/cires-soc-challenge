@@ -2,15 +2,8 @@
 - name: Deploy Wazuh to Docker Swarm
   hosts: swarm_manager
   become: yes
-  vars:
-    domain: "cires-wazuh-yahya.work.gd"
-    public_ip: "52.0.98.231"
-    wazuh_version: "4.12.0"
-    stack_name: "wazuh"
-    overlay_network: "wazuh_net"
-    certbot_email: "yahyaelourdighi.cyber@gmail.com"
-    project_root: "/home/ubuntu/cires-soc-challenge"
-
+  vars_files:
+    - group_vars/all.yml
   pre_tasks:
     - name: Install required packages
       apt:
@@ -21,8 +14,11 @@
         packages:
           - docker.io
           - python3-pip
+          - python3-docker
           - certbot
           - python3-certbot-nginx
+      register: apt_result
+      changed_when: apt_result.changed
 
   tasks:
     - name: Initialize Docker Swarm
@@ -44,6 +40,8 @@
         mode: '0755'
         owner: '1000'
         group: '1000'
+      register: config_dir
+      changed_when: config_dir.changed
 
     - name: Create Wazuh certificates directory
       file:
@@ -52,6 +50,8 @@
         mode: '0700'
         owner: '1000'
         group: '1000'
+      register: certs_dir
+      changed_when: certs_dir.changed
 
     - name: Create certbot webroot directory
       file:
@@ -60,26 +60,37 @@
         mode: '0755'
         owner: www-data
         group: www-data
+      register: certbot_dir
+      changed_when: certbot_dir.changed
+
+    - name: Fetch Wazuh API secrets from Vault
+      shell: |
+        vault kv get -field=wazuh_api_username secret/wazuh > /tmp/wazuh_api_username
+        vault kv get -field=wazuh_api_password secret/wazuh > /tmp/wazuh_api_password
+      environment:
+        VAULT_TOKEN: "{{ lookup('env', 'VAULT_TOKEN') }}"
+        VAULT_ADDR: "http://127.0.0.1:8200"
+      changed_when: true
+
+    - name: Generate wazuh.yml with secrets
+      copy:
+        src: /home/ubuntu/cires-soc-challenge/configs/wazuh_dashboard/wazuh.yml
+        dest: /etc/wazuh/wazuh.yml
+        mode: '0644'
+        owner: '1000'
+        group: '1000'
+      changed_when: true
 
     - name: Copy configuration files
       copy:
         src: "{{ item.src }}"
         dest: "{{ item.dest }}"
         mode: "{{ item.mode | default('0600') }}"
-        owner: '1000'
-        group: '1000'
-      loop:
-        - { src: "{{ project_root }}/configs/nginx.conf", dest: "/etc/nginx/nginx.conf" }
-        - { src: "{{ project_root }}/configs/wazuh_cluster/wazuh_manager.conf", dest: "/etc/wazuh/wazuh_manager.conf" }
-        - { src: "{{ project_root }}/configs/wazuh_cluster/wazuh_worker.conf", dest: "/etc/wazuh/wazuh_worker.conf" }
-        - { src: "{{ project_root }}/configs/wazuh_dashboard/opensearch_dashboards.yml", dest: "/etc/wazuh/opensearch_dashboards.yml" }
-        - { src: "{{ project_root }}/configs/wazuh_dashboard/wazuh.yml", dest: "/etc/wazuh/wazuh.yml" }
-        - { src: "{{ project_root }}/configs/wazuh_indexer/wazuh1_indexer.yml", dest: "/etc/wazuh/wazuh1_indexer.yml" }
-        - { src: "{{ project_root }}/configs/wazuh_indexer/wazuh2_indexer.yml", dest: "/etc/wazuh/wazuh2_indexer.yml" }
-        - { src: "{{ project_root }}/configs/wazuh_indexer/wazuh3_indexer.yml", dest: "/etc/wazuh/wazuh3_indexer.yml" }
-        - { src: "{{ project_root }}/configs/wazuh_indexer/internal_users.yml", dest: "/etc/wazuh/internal_users.yml" }
-        - { src: "{{ project_root }}/stack/wazuh-stack.yml", dest: "/etc/wazuh/wazuh-stack.yml", mode: '0644' }
-        - { src: "{{ project_root }}/configs/filebeat.yml", dest: "/etc/wazuh/filebeat.yml", mode: '0644' }
+        owner: "{{ 'root' if 'filebeat.yml' in item.dest else '1000' }}"
+        group: "{{ 'root' if 'filebeat.yml' in item.dest else '1000' }}"
+      loop: "{{ config_files | select('match', '^((?!wazuh\\.yml).)*$') | list }}"
+      register: config_copy
+      changed_when: config_copy.changed
 
     - name: Copy SSL certificates
       copy:
@@ -88,22 +99,9 @@
         mode: '0600'
         owner: '1000'
         group: '1000'
-      loop:
-        - { src: "{{ project_root }}/configs/wazuh_indexer_ssl_certs/root-ca.pem", dest: "/etc/wazuh/certs/root-ca.pem" }
-        - { src: "{{ project_root }}/configs/wazuh_indexer_ssl_certs/wazuh1-indexer.pem", dest: "/etc/wazuh/certs/wazuh1-indexer.pem" }
-        - { src: "{{ project_root }}/configs/wazuh_indexer_ssl_certs/wazuh1-indexer-key.pem", dest: "/etc/wazuh/certs/wazuh1-indexer-key.pem" }
-        - { src: "{{ project_root }}/configs/wazuh_indexer_ssl_certs/wazuh2-indexer.pem", dest: "/etc/wazuh/certs/wazuh2-indexer.pem" }
-        - { src: "{{ project_root }}/configs/wazuh_indexer_ssl_certs/wazuh2-indexer-key.pem", dest: "/etc/wazuh/certs/wazuh2-indexer-key.pem" }
-        - { src: "{{ project_root }}/configs/wazuh_indexer_ssl_certs/wazuh3-indexer.pem", dest: "/etc/wazuh/certs/wazuh3-indexer.pem" }
-        - { src: "{{ project_root }}/configs/wazuh_indexer_ssl_certs/wazuh3-indexer-key.pem", dest: "/etc/wazuh/certs/wazuh3-indexer-key.pem" }
-        - { src: "{{ project_root }}/configs/wazuh_indexer_ssl_certs/wazuh.dashboard.pem", dest: "/etc/wazuh/certs/wazuh.dashboard.pem" }
-        - { src: "{{ project_root }}/configs/wazuh_indexer_ssl_certs/wazuh.dashboard-key.pem", dest: "/etc/wazuh/certs/wazuh.dashboard-key.pem" }
-        - { src: "{{ project_root }}/configs/wazuh_indexer_ssl_certs/wazuh.master.pem", dest: "/etc/wazuh/certs/wazuh.master.pem" }
-        - { src: "{{ project_root }}/configs/wazuh_indexer_ssl_certs/wazuh.master-key.pem", dest: "/etc/wazuh/certs/wazuh.master-key.pem" }
-        - { src: "{{ project_root }}/configs/wazuh_indexer_ssl_certs/wazuh.worker.pem", dest: "/etc/wazuh/certs/wazuh.worker.pem" }
-        - { src: "{{ project_root }}/configs/wazuh_indexer_ssl_certs/wazuh.worker-key.pem", dest: "/etc/wazuh/certs/wazuh.worker-key.pem" }
-        - { src: "{{ project_root }}/configs/wazuh_indexer_ssl_certs/admin.pem", dest: "/etc/wazuh/certs/admin.pem" }
-        - { src: "{{ project_root }}/configs/wazuh_indexer_ssl_certs/admin-key.pem", dest: "/etc/wazuh/certs/admin-key.pem" }
+      loop: "{{ ssl_certs }}"
+      register: certs_copy
+      changed_when: certs_copy.changed
 
     - name: Check if Let's Encrypt certificates exist
       stat:
@@ -151,6 +149,8 @@
         - { path: "/etc/letsencrypt/live/{{ domain }}/privkey.pem", mode: '0600' }
         - { path: "/etc/letsencrypt/archive/{{ domain }}/privkey1.pem", mode: '0600' }
       when: cert_files.results | selectattr('stat.exists', 'equalto', true) | length > 0
+      register: cert_ownership
+      changed_when: cert_ownership.changed
 
     - name: Ensure /tmp has correct permissions
       file:
@@ -159,6 +159,27 @@
         mode: '1777'
         owner: root
         group: root
+      register: tmp_perms
+      changed_when: tmp_perms.changed
+
+    - name: Create Docker secrets from Vault
+      shell: |
+        vault kv get -field={{ item.field }} secret/wazuh | docker secret create {{ item.name }} -
+      loop:
+        - { name: wazuh_api_username, field: wazuh_api_username }
+        - { name: wazuh_api_password, field: wazuh_api_password }
+        - { name: indexer_username, field: indexer_username }
+        - { name: indexer_password, field: indexer_password }
+        - { name: dashboard_username, field: dashboard_username }
+        - { name: dashboard_password, field: dashboard_password }
+        - { name: filebeat_username, field: filebeat_username }
+        - { name: filebeat_password, field: filebeat_password }
+      environment:
+        VAULT_TOKEN: "{{ lookup('env', 'VAULT_TOKEN') }}"
+        VAULT_ADDR: "http://127.0.0.1:8200"
+      register: secret_create
+      changed_when: secret_create.rc == 0
+      ignore_errors: true
 
     - name: Remove any existing Wazuh stack
       command: docker stack rm {{ stack_name }}
@@ -169,13 +190,29 @@
       pause:
         seconds: 30
 
+    - name: Backup existing stack configuration
+      copy:
+        src: /etc/wazuh/wazuh-stack.yml
+        dest: /etc/wazuh/wazuh-stack.yml.bak
+        remote_src: yes
+        mode: '0644'
+      ignore_errors: true
+      register: backup_config
+
     - name: Deploy Wazuh stack to Docker Swarm
       command: docker stack deploy -c /etc/wazuh/wazuh-stack.yml {{ stack_name }}
-      changed_when: true
+      register: stack_deploy
+      changed_when: stack_deploy.rc == 0
+      failed_when: stack_deploy.rc != 0
+
+    - name: Roll back stack on failure
+      command: docker stack deploy -c /etc/wazuh/wazuh-stack.yml.bak {{ stack_name }}
+      when: stack_deploy.rc != 0 and backup_config is success
+      ignore_errors: true
 
     - name: Wait for services to start
       pause:
-        seconds: 60
+        seconds: 120
 
     - name: Check stack deployment status
       command: docker stack ps {{ stack_name }} --no-trunc
@@ -186,6 +223,20 @@
       debug:
         msg: "{{ stack_status.stdout_lines }}"
 
+    - name: Verify indexer connectivity
+      shell: docker exec $(docker ps -q -f name=wazuh_wazuh-master) curl -s -k -u {{ indexer_username }}:{{ indexer_password }} https://wazuh1-indexer:9200
+      register: indexer_check
+      until: indexer_check.rc == 0
+      retries: 10
+      delay: 30
+      ignore_errors: true
+
+    - name: Initialize Wazuh index patterns
+      shell: docker exec $(docker ps -q -f name=wazuh_wazuh-master) filebeat setup --index-management -E setup.ilm.enabled=false
+      register: filebeat_setup
+      changed_when: filebeat_setup.rc == 0
+      ignore_errors: true
+
     - name: Setup Certbot renewal cron
       cron:
         name: "Renew Let's Encrypt certificates"
@@ -195,7 +246,8 @@
         day: "*"
         month: "*"
         weekday: "*"
-      changed_when: true
+      register: certbot_cron
+      changed_when: certbot_cron.changed
 
   post_tasks:
     - name: Wait for Wazuh dashboard to be ready
@@ -203,11 +255,11 @@
         url: https://{{ domain }}
         method: GET
         validate_certs: no
-        timeout: 10
+        timeout: 30
       register: dashboard_check
       until: dashboard_check.status == 200 or dashboard_check.status == 302
-      retries: 60
-      delay: 15
+      retries: 20
+      delay: 30
       ignore_errors: true
 
     - name: Display final status

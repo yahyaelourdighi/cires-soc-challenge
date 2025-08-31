@@ -1,2 +1,31 @@
-vault-pass.txt
-vault-pass.txt
+# Sensitive files and secrets
+secrets/vault-pass.txt
+secrets/vault.yml
+ansible/secrets/init-output.txt
+
+# SSL certificates and keys
+configs/wazuh_indexer_ssl_certs/*.pem
+configs/wazuh_indexer_ssl_certs/*.key
+configs/wazuh_indexer_ssl_certs/*.csr
+configs/wazuh_indexer_ssl_certs/*.srl
+
+# Backup files
+*.bak
+*.bak2
+*.bak4
+
+# Python cache and test artifacts
+__pycache__/
+*.pyc
+tests/selenium/__pycache__/
+
+# Let’s Encrypt certificates
+/etc/letsencrypt/
+
+# Temporary files
+*.tmp
+*.log
+
+# IDE and editor files
+.vscode/
+.idea/

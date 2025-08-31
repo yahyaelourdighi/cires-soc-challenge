@@ -1,40 +1,69 @@
 name: Wazuh CI/CD Pipeline
+
 on:
   pull_request:
     branches: [ main ]
   push:
     branches: [ main ]
+
 jobs:
   build-and-test:
     runs-on: self-hosted
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
       - name: Install linting tools
         run: |
           pip3 install ansible-lint yamllint
+
       - name: Run ansible-lint
-        run: ansible-lint ansible/deploy-wazuh.yml
+        run: ansible-lint ansible/deploy-wazuh.yml ansible/teardown.yml
+
       - name: Run yamllint
         run: yamllint -c .yamllint ansible/ configs/ stack/ trivy.yaml
+
       - name: Build Nginx image
         run: docker build -t custom-nginx:latest -f docker/Dockerfile.nginx .
+
       - name: Scan image with Trivy
         run: trivy image --config trivy.yaml custom-nginx:latest
+
+      - name: Deploy temporary test stack
+        env:
+          ANSIBLE_VAULT_PASSWORD: \${{ secrets.ANSIBLE_VAULT_PASSWORD }}
+          VAULT_TOKEN: \${{ secrets.VAULT_TOKEN }}
+        run: |
+          echo "\$ANSIBLE_VAULT_PASSWORD" > vault-pass.txt
+          ansible-playbook -i ansible/inventory.yml ansible/deploy-wazuh.yml --vault-password-file vault-pass.txt --extra-vars "stack_name=wazuh-test"
+          sleep 120  # Wait for services to start
+
       - name: Run Selenium tests
         env:
-          DASHBOARD_USERNAME: ${{ secrets.DASHBOARD_USERNAME }}
-          DASHBOARD_PASSWORD: ${{ secrets.DASHBOARD_PASSWORD }}
-          API_USERNAME: ${{ secrets.WAZUH_API_USERNAME }}
-          API_PASSWORD: ${{ secrets.WAZUH_API_PASSWORD }}
+          DASHBOARD_USERNAME: \${{ secrets.DASHBOARD_USERNAME }}
+          DASHBOARD_PASSWORD: \${{ secrets.DASHBOARD_PASSWORD }}
+          API_USERNAME: \${{ secrets.WAZUH_API_USERNAME }}
+          API_PASSWORD: \${{ secrets.WAZUH_API_PASSWORD }}
+          READALL_USERNAME: \${{ secrets.READALL_USERNAME }}
+          READALL_PASSWORD: \${{ secrets.READALL_PASSWORD }}
         run: |
           pip3 install -r tests/requirements.txt
           pytest tests/selenium/test_dashboard.py tests/api/health_check.py
+
+      - name: Remove temporary test stack
+        if: always()
+        env:
+          ANSIBLE_VAULT_PASSWORD: \${{ secrets.ANSIBLE_VAULT_PASSWORD }}
+          VAULT_TOKEN: \${{ secrets.VAULT_TOKEN }}
+        run: |
+          echo "\$ANSIBLE_VAULT_PASSWORD" > vault-pass.txt
+          ansible-playbook -i ansible/inventory.yml ansible/teardown.yml --vault-password-file vault-pass.txt --extra-vars "stack_name=wazuh-test"
+
       - name: Deploy to Docker Swarm (main branch only)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
-          ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
-          VAULT_TOKEN: ${{ secrets.VAULT_TOKEN }}
+          ANSIBLE_VAULT_PASSWORD: \${{ secrets.ANSIBLE_VAULT_PASSWORD }}
+          VAULT_TOKEN: \${{ secrets.VAULT_TOKEN }}
         run: |
-          echo "$ANSIBLE_VAULT_PASSWORD" > vault-pass.txt
+          echo "\$ANSIBLE_VAULT_PASSWORD" > vault-pass.txt
           ansible-playbook -i ansible/inventory.yml ansible/deploy-wazuh.yml --vault-password-file vault-pass.txt

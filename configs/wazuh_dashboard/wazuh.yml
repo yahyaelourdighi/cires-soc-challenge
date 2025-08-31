@@ -2,6 +2,6 @@ hosts:
   - 1513629884013:
       url: "https://wazuh-master"
       port: 55000
-      username: wazuh-wui
-      password: k1b4n4#S3rv3r@2025#AP!
+      username: "wazuh-wui"
+      password: "k1b4n4#S3rv3r@2025#AP!"
       run_as: false

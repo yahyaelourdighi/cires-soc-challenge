@@ -61,8 +61,6 @@ services:
       - SYS_RESOURCE
       - SYS_ADMIN
       - SYS_PTRACE
-    security_opt:
-      - seccomp:unconfined
     ulimits:
       nproc: 65535
       nofile:
@@ -118,15 +116,13 @@ services:
       - worker-filebeat-var:/var/lib/filebeat
       - /etc/wazuh/certs:/etc/ssl:ro
       - /etc/wazuh/wazuh_worker.conf:/wazuh-config-mount/etc/ossec.conf:ro
-      # - /etc/wazuh/filebeat-worker.yml:/etc/filebeat/filebeat.yml
-      # - /etc/wazuh/wazuh-template.json:/etc/filebeat/wazuh-template.json:ro
+      #- /etc/wazuh/filebeat-worker.yml:/etc/filebeat/filebeat.yml:ro
+      #- /etc/wazuh/wazuh-template.json:/etc/filebeat/wazuh-template.json:ro
     cap_add:
       - SYS_NICE
       - SYS_RESOURCE
       - SYS_ADMIN
       - SYS_PTRACE
-    security_opt:
-      - seccomp:unconfined
     ulimits:
       nproc: 65535
       nofile:
@@ -292,7 +288,7 @@ services:
         published: 5601
         mode: host
     environment:
-      - OPENSEARCH_HOSTS=https://wazuh1-indexer:9200 https://wazuh2-indexer:9200 https://wazuh3-indexer:9200
+      - OPENSEARCH_HOSTS=https://wazuh1-indexer:9200,https://wazuh2-indexer:9200,https://wazuh3-indexer:9200
       - WAZUH_API_URL=https://wazuh-master:55000
     secrets:
       - indexer_username

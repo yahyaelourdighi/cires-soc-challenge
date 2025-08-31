@@ -1,0 +1,25 @@
+---
+- name: Teardown Wazuh Stack from Docker Swarm
+  hosts: swarm_manager
+  become: yes
+  vars_files:
+    - group_vars/all.yml
+  tasks:
+    - name: Remove Wazuh stack
+      command: docker stack rm {{ stack_name }}
+      ignore_errors: true
+      changed_when: true
+
+    - name: Wait for stack removal to complete
+      pause:
+        seconds: 30
+
+    - name: Verify stack removal
+      command: docker stack ls
+      register: stack_list
+      changed_when: false
+      failed_when: "'{{ stack_name }}' in stack_list.stdout"
+
+    - name: Display removal status
+      debug:
+        msg: "Wazuh stack '{{ stack_name }}' has been removed successfully."

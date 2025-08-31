@@ -1,0 +1,33 @@
+filebeat.inputs:
+  - type: log
+    paths:
+      - /var/ossec/logs/alerts/alerts.json
+    enabled: false
+
+filebeat.modules:
+  - module: wazuh
+    alerts:
+      enabled: false
+    archives:
+      enabled: false
+
+setup.template.json.enabled: false
+setup.ilm.enabled: false
+
+output.elasticsearch:
+  enabled: false
+
+logging.level: debug
+logging.to_files: true
+logging.files:
+  path: /var/ossec/logs/filebeat
+  name: filebeat.log
+  keepfiles: 7
+  permissions: 0640
+
+seccomp:
+  default_action: allow
+  syscalls:
+    - action: allow
+      names:
+        - rseq
