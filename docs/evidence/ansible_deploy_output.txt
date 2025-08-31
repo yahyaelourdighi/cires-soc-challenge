@@ -1,0 +1,161 @@
+
+PLAY [Deploy Wazuh to Docker Swarm] ********************************************
+
+TASK [Gathering Facts] *********************************************************
+ok: [ip-172-31-16-188]
+
+TASK [Install required packages] ***********************************************
+ok: [ip-172-31-16-188]
+
+TASK [Initialize Docker Swarm] *************************************************
+ok: [ip-172-31-16-188]
+
+TASK [Create overlay network] **************************************************
+ok: [ip-172-31-16-188]
+
+TASK [Create Wazuh configuration directory] ************************************
+ok: [ip-172-31-16-188]
+
+TASK [Create Wazuh certificates directory] *************************************
+ok: [ip-172-31-16-188]
+
+TASK [Create certbot webroot directory] ****************************************
+ok: [ip-172-31-16-188]
+
+TASK [Fetch Wazuh API secrets from Vault] **************************************
+changed: [ip-172-31-16-188]
+
+TASK [Generate wazuh.yml with secrets] *****************************************
+changed: [ip-172-31-16-188]
+
+TASK [Copy configuration files] ************************************************
+ok: [ip-172-31-16-188] => (item={'src': '/home/ubuntu/cires-soc-challenge/configs/nginx.conf', 'dest': '/etc/nginx/nginx.conf', 'mode': '0644'})
+ok: [ip-172-31-16-188] => (item={'src': '/home/ubuntu/cires-soc-challenge/configs/wazuh_cluster/wazuh_manager.conf', 'dest': '/etc/wazuh/wazuh_manager.conf', 'mode': '0644'})
+ok: [ip-172-31-16-188] => (item={'src': '/home/ubuntu/cires-soc-challenge/configs/wazuh_cluster/wazuh_worker.conf', 'dest': '/etc/wazuh/wazuh_worker.conf', 'mode': '0644'})
+ok: [ip-172-31-16-188] => (item={'src': '/home/ubuntu/cires-soc-challenge/configs/wazuh_dashboard/opensearch_dashboards.yml', 'dest': '/etc/wazuh/opensearch_dashboards.yml', 'mode': '0644'})
+ok: [ip-172-31-16-188] => (item={'src': '/home/ubuntu/cires-soc-challenge/configs/wazuh_indexer/wazuh1_indexer.yml', 'dest': '/etc/wazuh/wazuh1_indexer.yml', 'mode': '0644'})
+ok: [ip-172-31-16-188] => (item={'src': '/home/ubuntu/cires-soc-challenge/configs/wazuh_indexer/wazuh2_indexer.yml', 'dest': '/etc/wazuh/wazuh2_indexer.yml', 'mode': '0644'})
+ok: [ip-172-31-16-188] => (item={'src': '/home/ubuntu/cires-soc-challenge/configs/wazuh_indexer/wazuh3_indexer.yml', 'dest': '/etc/wazuh/wazuh3_indexer.yml', 'mode': '0644'})
+ok: [ip-172-31-16-188] => (item={'src': '/home/ubuntu/cires-soc-challenge/configs/wazuh_indexer/internal_users.yml', 'dest': '/etc/wazuh/internal_users.yml', 'mode': '0644'})
+ok: [ip-172-31-16-188] => (item={'src': '/home/ubuntu/cires-soc-challenge/stack/wazuh-stack.yml', 'dest': '/etc/wazuh/wazuh-stack.yml', 'mode': '0644'})
+ok: [ip-172-31-16-188] => (item={'src': '/home/ubuntu/cires-soc-challenge/configs/filebeat.yml', 'dest': '/etc/wazuh/filebeat.yml', 'mode': '0644'})
+ok: [ip-172-31-16-188] => (item={'src': '/home/ubuntu/cires-soc-challenge/configs/filebeat-worker.yml', 'dest': '/etc/wazuh/filebeat-worker.yml', 'mode': '0644'})
+ok: [ip-172-31-16-188] => (item={'src': '/home/ubuntu/cires-soc-challenge/configs/wazuh-template.json', 'dest': '/etc/wazuh/wazuh-template.json', 'mode': '0644'})
+
+TASK [Copy SSL certificates] ***************************************************
+ok: [ip-172-31-16-188] => (item={'src': '/home/ubuntu/cires-soc-challenge/configs/wazuh_indexer_ssl_certs/root-ca.pem', 'dest': '/etc/wazuh/certs/root-ca.pem', 'mode': '0644'})
+ok: [ip-172-31-16-188] => (item={'src': '/home/ubuntu/cires-soc-challenge/configs/wazuh_indexer_ssl_certs/wazuh1-indexer.pem', 'dest': '/etc/wazuh/certs/wazuh1-indexer.pem', 'mode': '0644'})
+ok: [ip-172-31-16-188] => (item={'src': '/home/ubuntu/cires-soc-challenge/configs/wazuh_indexer_ssl_certs/wazuh1-indexer-key.pem', 'dest': '/etc/wazuh/certs/wazuh1-indexer-key.pem', 'mode': '0600'})
+ok: [ip-172-31-16-188] => (item={'src': '/home/ubuntu/cires-soc-challenge/configs/wazuh_indexer_ssl_certs/wazuh2-indexer.pem', 'dest': '/etc/wazuh/certs/wazuh2-indexer.pem', 'mode': '0644'})
+ok: [ip-172-31-16-188] => (item={'src': '/home/ubuntu/cires-soc-challenge/configs/wazuh_indexer_ssl_certs/wazuh2-indexer-key.pem', 'dest': '/etc/wazuh/certs/wazuh2-indexer-key.pem', 'mode': '0600'})
+ok: [ip-172-31-16-188] => (item={'src': '/home/ubuntu/cires-soc-challenge/configs/wazuh_indexer_ssl_certs/wazuh3-indexer.pem', 'dest': '/etc/wazuh/certs/wazuh3-indexer.pem', 'mode': '0644'})
+ok: [ip-172-31-16-188] => (item={'src': '/home/ubuntu/cires-soc-challenge/configs/wazuh_indexer_ssl_certs/wazuh3-indexer-key.pem', 'dest': '/etc/wazuh/certs/wazuh3-indexer-key.pem', 'mode': '0600'})
+ok: [ip-172-31-16-188] => (item={'src': '/home/ubuntu/cires-soc-challenge/configs/wazuh_indexer_ssl_certs/wazuh.dashboard.pem', 'dest': '/etc/wazuh/certs/wazuh-dashboard.pem', 'mode': '0644'})
+ok: [ip-172-31-16-188] => (item={'src': '/home/ubuntu/cires-soc-challenge/configs/wazuh_indexer_ssl_certs/wazuh.dashboard-key.pem', 'dest': '/etc/wazuh/certs/wazuh-dashboard-key.pem', 'mode': '0600'})
+ok: [ip-172-31-16-188] => (item={'src': '/home/ubuntu/cires-soc-challenge/configs/wazuh_indexer_ssl_certs/wazuh.master.pem', 'dest': '/etc/wazuh/certs/wazuh-master.pem', 'mode': '0644'})
+ok: [ip-172-31-16-188] => (item={'src': '/home/ubuntu/cires-soc-challenge/configs/wazuh_indexer_ssl_certs/wazuh.master-key.pem', 'dest': '/etc/wazuh/certs/wazuh-master-key.pem', 'mode': '0600'})
+ok: [ip-172-31-16-188] => (item={'src': '/home/ubuntu/cires-soc-challenge/configs/wazuh_indexer_ssl_certs/wazuh.worker.pem', 'dest': '/etc/wazuh/certs/wazuh-worker.pem', 'mode': '0644'})
+ok: [ip-172-31-16-188] => (item={'src': '/home/ubuntu/cires-soc-challenge/configs/wazuh_indexer_ssl_certs/wazuh.worker-key.pem', 'dest': '/etc/wazuh/certs/wazuh-worker-key.pem', 'mode': '0600'})
+ok: [ip-172-31-16-188] => (item={'src': '/home/ubuntu/cires-soc-challenge/configs/wazuh_indexer_ssl_certs/admin.pem', 'dest': '/etc/wazuh/certs/admin.pem', 'mode': '0644'})
+ok: [ip-172-31-16-188] => (item={'src': '/home/ubuntu/cires-soc-challenge/configs/wazuh_indexer_ssl_certs/admin-key.pem', 'dest': '/etc/wazuh/certs/admin-key.pem', 'mode': '0600'})
+
+TASK [Check if Let's Encrypt certificates exist] *******************************
+ok: [ip-172-31-16-188]
+
+TASK [Stop nginx service if running] *******************************************
+ok: [ip-172-31-16-188]
+
+TASK [Setup Let's Encrypt for domain if no certificates exist] *****************
+skipping: [ip-172-31-16-188]
+
+TASK [Verify certificate files exist and are readable] *************************
+ok: [ip-172-31-16-188] => (item=/etc/letsencrypt/live/cires-wazuh-yahya.work.gd/fullchain.pem)
+ok: [ip-172-31-16-188] => (item=/etc/letsencrypt/live/cires-wazuh-yahya.work.gd/privkey.pem)
+
+TASK [Fail if certificate files are missing] ***********************************
+skipping: [ip-172-31-16-188] => (item=/etc/letsencrypt/live/cires-wazuh-yahya.work.gd/fullchain.pem) 
+skipping: [ip-172-31-16-188] => (item=/etc/letsencrypt/live/cires-wazuh-yahya.work.gd/privkey.pem) 
+skipping: [ip-172-31-16-188]
+
+TASK [Set proper ownership for Let's Encrypt certificates] *********************
+ok: [ip-172-31-16-188] => (item={'path': '/etc/letsencrypt/live/cires-wazuh-yahya.work.gd/fullchain.pem', 'mode': '0644'})
+ok: [ip-172-31-16-188] => (item={'path': '/etc/letsencrypt/archive/cires-wazuh-yahya.work.gd/fullchain1.pem', 'mode': '0644'})
+ok: [ip-172-31-16-188] => (item={'path': '/etc/letsencrypt/live/cires-wazuh-yahya.work.gd/privkey.pem', 'mode': '0600'})
+ok: [ip-172-31-16-188] => (item={'path': '/etc/letsencrypt/archive/cires-wazuh-yahya.work.gd/privkey1.pem', 'mode': '0600'})
+
+TASK [Ensure /tmp has correct permissions] *************************************
+ok: [ip-172-31-16-188]
+
+TASK [Create Docker secrets from Vault] ****************************************
+failed: [ip-172-31-16-188] (item={'name': 'wazuh_api_username', 'field': 'wazuh_api_username'}) => {"ansible_loop_var": "item", "changed": false, "cmd": "vault kv get -field=wazuh_api_username secret/wazuh | docker secret create wazuh_api_username -\n", "delta": "0:00:00.156710", "end": "2025-08-31 16:40:20.337677", "item": {"field": "wazuh_api_username", "name": "wazuh_api_username"}, "msg": "non-zero return code", "rc": 1, "start": "2025-08-31 16:40:20.180967", "stderr": "Error response from daemon: rpc error: code = AlreadyExists desc = secret wazuh_api_username already exists", "stderr_lines": ["Error response from daemon: rpc error: code = AlreadyExists desc = secret wazuh_api_username already exists"], "stdout": "", "stdout_lines": []}
+failed: [ip-172-31-16-188] (item={'name': 'wazuh_api_password', 'field': 'wazuh_api_password'}) => {"ansible_loop_var": "item", "changed": false, "cmd": "vault kv get -field=wazuh_api_password secret/wazuh | docker secret create wazuh_api_password -\n", "delta": "0:00:00.163085", "end": "2025-08-31 16:40:20.782506", "item": {"field": "wazuh_api_password", "name": "wazuh_api_password"}, "msg": "non-zero return code", "rc": 1, "start": "2025-08-31 16:40:20.619421", "stderr": "Error response from daemon: rpc error: code = AlreadyExists desc = secret wazuh_api_password already exists", "stderr_lines": ["Error response from daemon: rpc error: code = AlreadyExists desc = secret wazuh_api_password already exists"], "stdout": "", "stdout_lines": []}
+failed: [ip-172-31-16-188] (item={'name': 'indexer_username', 'field': 'indexer_username'}) => {"ansible_loop_var": "item", "changed": false, "cmd": "vault kv get -field=indexer_username secret/wazuh | docker secret create indexer_username -\n", "delta": "0:00:00.159435", "end": "2025-08-31 16:40:21.227036", "item": {"field": "indexer_username", "name": "indexer_username"}, "msg": "non-zero return code", "rc": 1, "start": "2025-08-31 16:40:21.067601", "stderr": "Error response from daemon: rpc error: code = AlreadyExists desc = secret indexer_username already exists", "stderr_lines": ["Error response from daemon: rpc error: code = AlreadyExists desc = secret indexer_username already exists"], "stdout": "", "stdout_lines": []}
+failed: [ip-172-31-16-188] (item={'name': 'indexer_password', 'field': 'indexer_password'}) => {"ansible_loop_var": "item", "changed": false, "cmd": "vault kv get -field=indexer_password secret/wazuh | docker secret create indexer_password -\n", "delta": "0:00:00.159407", "end": "2025-08-31 16:40:21.674160", "item": {"field": "indexer_password", "name": "indexer_password"}, "msg": "non-zero return code", "rc": 1, "start": "2025-08-31 16:40:21.514753", "stderr": "Error response from daemon: rpc error: code = AlreadyExists desc = secret indexer_password already exists", "stderr_lines": ["Error response from daemon: rpc error: code = AlreadyExists desc = secret indexer_password already exists"], "stdout": "", "stdout_lines": []}
+failed: [ip-172-31-16-188] (item={'name': 'dashboard_username', 'field': 'dashboard_username'}) => {"ansible_loop_var": "item", "changed": false, "cmd": "vault kv get -field=dashboard_username secret/wazuh | docker secret create dashboard_username -\n", "delta": "0:00:00.158919", "end": "2025-08-31 16:40:22.117441", "item": {"field": "dashboard_username", "name": "dashboard_username"}, "msg": "non-zero return code", "rc": 1, "start": "2025-08-31 16:40:21.958522", "stderr": "Error response from daemon: rpc error: code = AlreadyExists desc = secret dashboard_username already exists", "stderr_lines": ["Error response from daemon: rpc error: code = AlreadyExists desc = secret dashboard_username already exists"], "stdout": "", "stdout_lines": []}
+failed: [ip-172-31-16-188] (item={'name': 'dashboard_password', 'field': 'dashboard_password'}) => {"ansible_loop_var": "item", "changed": false, "cmd": "vault kv get -field=dashboard_password secret/wazuh | docker secret create dashboard_password -\n", "delta": "0:00:00.162096", "end": "2025-08-31 16:40:22.568022", "item": {"field": "dashboard_password", "name": "dashboard_password"}, "msg": "non-zero return code", "rc": 1, "start": "2025-08-31 16:40:22.405926", "stderr": "Error response from daemon: rpc error: code = AlreadyExists desc = secret dashboard_password already exists", "stderr_lines": ["Error response from daemon: rpc error: code = AlreadyExists desc = secret dashboard_password already exists"], "stdout": "", "stdout_lines": []}
+failed: [ip-172-31-16-188] (item={'name': 'filebeat_username', 'field': 'filebeat_username'}) => {"ansible_loop_var": "item", "changed": false, "cmd": "vault kv get -field=filebeat_username secret/wazuh | docker secret create filebeat_username -\n", "delta": "0:00:00.160595", "end": "2025-08-31 16:40:23.013538", "item": {"field": "filebeat_username", "name": "filebeat_username"}, "msg": "non-zero return code", "rc": 1, "start": "2025-08-31 16:40:22.852943", "stderr": "Error response from daemon: rpc error: code = AlreadyExists desc = secret filebeat_username already exists", "stderr_lines": ["Error response from daemon: rpc error: code = AlreadyExists desc = secret filebeat_username already exists"], "stdout": "", "stdout_lines": []}
+failed: [ip-172-31-16-188] (item={'name': 'filebeat_password', 'field': 'filebeat_password'}) => {"ansible_loop_var": "item", "changed": false, "cmd": "vault kv get -field=filebeat_password secret/wazuh | docker secret create filebeat_password -\n", "delta": "0:00:00.158875", "end": "2025-08-31 16:40:23.451559", "item": {"field": "filebeat_password", "name": "filebeat_password"}, "msg": "non-zero return code", "rc": 1, "start": "2025-08-31 16:40:23.292684", "stderr": "Error response from daemon: rpc error: code = AlreadyExists desc = secret filebeat_password already exists", "stderr_lines": ["Error response from daemon: rpc error: code = AlreadyExists desc = secret filebeat_password already exists"], "stdout": "", "stdout_lines": []}
+...ignoring
+
+TASK [Remove any existing Wazuh stack] *****************************************
+changed: [ip-172-31-16-188]
+
+TASK [Wait for stack removal to complete] **************************************
+Pausing for 30 seconds
+(ctrl+C then 'C' = continue early, ctrl+C then 'A' = abort)
+ok: [ip-172-31-16-188]
+
+TASK [Backup existing stack configuration] *************************************
+ok: [ip-172-31-16-188]
+
+TASK [Deploy Wazuh stack to Docker Swarm] **************************************
+changed: [ip-172-31-16-188]
+
+TASK [Roll back stack on failure] **********************************************
+skipping: [ip-172-31-16-188]
+
+TASK [Wait for services to start] **********************************************
+Pausing for 120 seconds
+(ctrl+C then 'C' = continue early, ctrl+C then 'A' = abort)
+ok: [ip-172-31-16-188]
+
+TASK [Check stack deployment status] *******************************************
+ok: [ip-172-31-16-188]
+
+TASK [Display stack status] ****************************************************
+ok: [ip-172-31-16-188] => {
+    "msg": [
+        "ID                          NAME                      IMAGE                                                                                                  NODE               DESIRED STATE   CURRENT STATE                 ERROR                       PORTS",
+        "k0l2g65zii831j6bk66x0zbx2   wazuh_nginx.1             nginx:stable@sha256:24ccf9a6192d2c6c5c4a6e9d2fdfa2a8e382b15f8dd7d0e05a1579f6a46f7776                   ip-172-31-16-188   Running         Starting about a minute ago                               ",
+        "8u7ad236o8pgwobiemtdziqfn    \\_ wazuh_nginx.1         nginx:stable@sha256:24ccf9a6192d2c6c5c4a6e9d2fdfa2a8e382b15f8dd7d0e05a1579f6a46f7776                   ip-172-31-16-188   Shutdown        Failed about a minute ago     \"task: non-zero exit (1)\"   ",
+        "go8epitnwu3u13zc57mk5hyr3    \\_ wazuh_nginx.1         nginx:stable@sha256:24ccf9a6192d2c6c5c4a6e9d2fdfa2a8e382b15f8dd7d0e05a1579f6a46f7776                   ip-172-31-16-188   Shutdown        Failed about a minute ago     \"task: non-zero exit (1)\"   ",
+        "k0hrv4qlk1xjtsvmja5fzr9f0    \\_ wazuh_nginx.1         nginx:stable@sha256:24ccf9a6192d2c6c5c4a6e9d2fdfa2a8e382b15f8dd7d0e05a1579f6a46f7776                   ip-172-31-16-188   Shutdown        Failed 2 minutes ago          \"task: non-zero exit (1)\"   ",
+        "yoy2mtawku5fssd7la9zrb4jo   wazuh_wazuh1-indexer.1    wazuh/wazuh-indexer:4.12.0@sha256:cfda3fcfd9e9f4e115cb3f019ca38a354eda38585720c73621711567ac586325     ip-172-31-16-188   Running         Running 27 seconds ago                                    *:9200->9200/tcp,*:9200->9200/tcp",
+        "avq6z4ite0j7k5bgsa3gi596h   wazuh_wazuh2-indexer.1    wazuh/wazuh-indexer:4.12.0@sha256:cfda3fcfd9e9f4e115cb3f019ca38a354eda38585720c73621711567ac586325     ip-172-31-16-188   Running         Running 27 seconds ago                                    ",
+        "z27u8jejihah662pk3fv5qixh   wazuh_wazuh3-indexer.1    wazuh/wazuh-indexer:4.12.0@sha256:cfda3fcfd9e9f4e115cb3f019ca38a354eda38585720c73621711567ac586325     ip-172-31-16-188   Running         Running 27 seconds ago                                    ",
+        "m6efgjnaav6ejpbq5viyw3rsj   wazuh_wazuh-dashboard.1   wazuh/wazuh-dashboard:4.12.0@sha256:f383341417c156e63b1d66260a66ca37a7ba45be479263ae903629b443acef75   ip-172-31-16-188   Running         Running about a minute ago                                *:5601->5601/tcp,*:5601->5601/tcp",
+        "vqztkpmqn8j8415ekvfo7trjq   wazuh_wazuh-master.1      wazuh/wazuh-manager:4.12.0@sha256:b4859ede774e2229d62e400e88be8eedcdbf2779edab4bd6dbbb5fc03e723920     ip-172-31-16-188   Running         Running about a minute ago                                *:1514->1514/tcp,*:1514->1514/tcp,*:514->514/udp,*:514->514/udp,*:55000->55000/tcp,*:55000->55000/tcp,*:1515->1515/tcp,*:1515->1515/tcp",
+        "ojonptgklpsl7zpxyfp69qjln   wazuh_wazuh-worker.1      wazuh/wazuh-manager:4.12.0@sha256:b4859ede774e2229d62e400e88be8eedcdbf2779edab4bd6dbbb5fc03e723920     ip-172-31-16-188   Running         Running about a minute ago                                "
+    ]
+}
+
+TASK [Verify indexer connectivity] *********************************************
+changed: [ip-172-31-16-188]
+
+TASK [Initialize Wazuh index patterns] *****************************************
+changed: [ip-172-31-16-188]
+
+TASK [Setup Certbot renewal cron] **********************************************
+ok: [ip-172-31-16-188]
+
+TASK [Wait for Wazuh dashboard to be ready] ************************************
+ok: [ip-172-31-16-188]
+
+TASK [Display final status] ****************************************************
+ok: [ip-172-31-16-188] => {
+    "msg": "Wazuh deployment completed!\n\nAccess URLs:\n- Wazuh Dashboard: https://cires-wazuh-yahya.work.gd\n- Wazuh API: https://cires-wazuh-yahya.work.gd:55000\n\nService Status: Ready\n\nTo check logs: docker service logs wazuh_nginx\nTo check status: docker stack ps wazuh\n"
+}
+
+PLAY RECAP *********************************************************************
+ip-172-31-16-188           : ok=29   changed=6    unreachable=0    failed=0    skipped=3    rescued=0    ignored=1   
+
