@@ -1,0 +1,81 @@
+total 4
+-rw-r--r-- 1 ubuntu ubuntu 692 Aug 21 19:52 README
+lrwxrwxrwx 1 root   root    49 Aug 21 19:52 cert.pem -> ../../archive/cires-wazuh-yahya.work.gd/cert1.pem
+lrwxrwxrwx 1 root   root    50 Aug 21 19:52 chain.pem -> ../../archive/cires-wazuh-yahya.work.gd/chain1.pem
+lrwxrwxrwx 1 root   root    54 Aug 21 19:52 fullchain.pem -> ../../archive/cires-wazuh-yahya.work.gd/fullchain1.pem
+lrwxrwxrwx 1 root   root    52 Aug 21 19:52 privkey.pem -> ../../archive/cires-wazuh-yahya.work.gd/privkey1.pem
+Certificate:
+    Data:
+        Version: 3 (0x2)
+        Serial Number:
+            05:dc:9b:24:d4:c0:74:3d:91:68:04:c5:65:50:29:cb:19:64
+        Signature Algorithm: ecdsa-with-SHA384
+        Issuer: C = US, O = Let's Encrypt, CN = E8
+        Validity
+            Not Before: Aug 21 18:54:08 2025 GMT
+            Not After : Nov 19 18:54:07 2025 GMT
+        Subject: CN = cires-wazuh-yahya.work.gd
+        Subject Public Key Info:
+            Public Key Algorithm: id-ecPublicKey
+                Public-Key: (256 bit)
+                pub:
+                    04:69:13:84:d3:6c:0e:52:e7:08:e6:87:0c:e8:6a:
+                    e7:6a:c5:a0:7d:12:6e:17:83:c9:5a:6e:18:61:39:
+                    36:8b:6f:b1:04:68:83:65:83:14:04:ee:46:21:96:
+                    bc:c8:1f:27:36:b5:80:19:07:bd:34:3f:51:44:8b:
+                    4e:8e:2a:f6:29
+                ASN1 OID: prime256v1
+                NIST CURVE: P-256
+        X509v3 extensions:
+            X509v3 Key Usage: critical
+                Digital Signature
+            X509v3 Extended Key Usage: 
+                TLS Web Server Authentication, TLS Web Client Authentication
+            X509v3 Basic Constraints: critical
+                CA:FALSE
+            X509v3 Subject Key Identifier: 
+                64:FF:9E:9D:81:3A:69:DB:83:DB:86:FE:A5:24:35:B4:62:06:19:43
+            X509v3 Authority Key Identifier: 
+                8F:0D:13:A2:F6:2E:7E:D1:50:6C:33:18:38:5D:59:8E:23:72:91:CA
+            Authority Information Access: 
+                CA Issuers - URI:http://e8.i.lencr.org/
+            X509v3 Subject Alternative Name: 
+                DNS:cires-wazuh-yahya.work.gd
+            X509v3 Certificate Policies: 
+                Policy: 2.23.140.1.2.1
+            X509v3 CRL Distribution Points: 
+                Full Name:
+                  URI:http://e8.c.lencr.org/101.crl
+            CT Precertificate SCTs: 
+                Signed Certificate Timestamp:
+                    Version   : v1 (0x0)
+                    Log ID    : ED:3C:4B:D6:E8:06:C2:A4:A2:00:57:DB:CB:24:E2:38:
+                                01:DF:51:2F:ED:C4:86:C5:70:0F:20:DD:B7:3E:3F:E0
+                    Timestamp : Aug 21 19:52:38.865 2025 GMT
+                    Extensions: none
+                    Signature : ecdsa-with-SHA256
+                                30:46:02:21:00:8E:35:D8:86:47:29:70:49:96:D8:8C:
+                                09:52:6A:3B:13:9A:93:E6:80:00:E4:32:17:5C:3B:67:
+                                CE:BA:B5:35:9C:02:21:00:A5:0C:B9:06:61:C4:66:CB:
+                                23:EA:F8:4A:88:F8:74:1F:CB:48:FC:4E:95:9B:5F:47:
+                                FA:CF:D8:CE:CD:24:5F:1A
+                Signed Certificate Timestamp:
+                    Version   : v1 (0x0)
+                    Log ID    : AF:18:1A:28:D6:8C:A3:E0:A9:8A:4C:9C:67:AB:09:F8:
+                                BB:BC:22:BA:AE:BC:B1:38:A3:A1:9D:D3:F9:B6:03:0D
+                    Timestamp : Aug 21 19:52:39.113 2025 GMT
+                    Extensions: none
+                    Signature : ecdsa-with-SHA256
+                                30:45:02:20:0E:45:DC:07:98:02:17:32:40:95:C2:95:
+                                FD:20:17:2A:4B:DC:DF:AF:8F:AD:B2:FF:41:97:4B:F4:
+                                96:E0:6F:38:02:21:00:E6:36:22:1F:90:CE:C9:97:D3:
+                                D8:38:67:4E:EB:C6:A5:89:C4:CE:B3:56:DA:96:DE:3F:
+                                D1:31:E4:CB:A0:2B:34
+    Signature Algorithm: ecdsa-with-SHA384
+    Signature Value:
+        30:65:02:31:00:ca:b2:4d:9d:98:96:6c:f8:ee:e5:b7:d1:76:
+        d6:92:1d:5e:af:e0:c8:9e:73:63:69:bf:bf:1c:3c:0d:33:1b:
+        e5:5f:d8:2c:2c:c6:56:35:2d:fe:db:54:08:38:f7:69:86:02:
+        30:30:42:23:56:40:69:bd:36:33:1f:7d:fc:d2:8a:41:03:ae:
+        15:03:70:05:70:43:0e:a3:8b:4e:7a:78:eb:b9:b2:13:72:2e:
+        6e:a7:9f:b1:6d:00:b3:c9:c9:25:45:71:fb
