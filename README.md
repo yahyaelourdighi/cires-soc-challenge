@@ -5,6 +5,7 @@ This project deploys a Wazuh Security Information and Event Management (SIEM) sy
 ### Accessing the Wazuh Dashboard
 
 The Wazuh dashboard is accessible at https://cires-wazuh-yahya.work.gd.
+
 <img width="1363" height="637" alt="dashboard_2025-08-31 172905" src="https://github.com/user-attachments/assets/2230c603-0462-4c5c-9f13-dd61579d9752" />
 
 
