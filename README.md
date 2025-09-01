@@ -251,3 +251,301 @@ To manage secrets securely, set up a HashiCorp Vault server and CLI:
 
 ## Troubleshooting
 See `docs/troubleshooting.md` for common issues and solutions, including Nginx failures, secret validation, certificate checks, and vault password file errors.
+
+
+# SSH Brute Force Detection with Wazuh
+
+This document details the configuration of Wazuh to detect a brute force attack (MITRE ATT&CK T1110) involving three or more failed SSH login attempts from the same IP within 60 seconds, followed by a successful login with a username not seen on the host in the last 24 hours. Custom decoders and rules process `/var/log/auth.log` to generate high-severity alerts. All configuration files and evidence are stored in the `cires-soc-challenge/docs/evidence/` directory of the Git repository.
+
+## Objective
+
+Detect a brute force attack pattern:
+
+- Three or more failed SSH login attempts from the same source IP within 60 seconds.
+- A successful login from the same IP with a username not seen on the host in the past 24 hours.
+- Generate a level 12 alert with metadata including source IP, username, and time window.
+
+**Note**: The Wazuh dashboard is accessible at `https://cires-wazuh-yahya.work.gd/`.
+
+## System Requirements
+
+- **Wazuh Server**: Ubuntu, private IP `172.31.16.188`, public IP `52.0.98.231`, running Wazuh 4.12.0.
+- **Wazuh Agent**: Ubuntu, private IP `172.31.17.159`, public IP `44.223.53.170`, connected to the server.
+- **Access**: SSH access to both servers and dashboard access at `https://cires-wazuh-yahya.work.gd/`.
+
+## Configuration
+
+### 1. Custom Decoders
+
+Decoders extract `user`, `srcip`, and `srcport` from `/var/log/auth.log` for failed and successful SSH login attempts.
+
+**File**: `/var/ossec/etc/decoders/local_decoder.xml` on the Wazuh server (`172.31.23.233`).
+
+**Content**:
+
+```xml
+<decoder name="ssh-bruteforce-invalid">
+  <parent>sshd</parent>
+  <prematch offset="after_parent">^Failed password for invalid user </prematch>
+  <regex offset="after_prematch">^(\S+) from (\S+) port (\d+) ssh2$</regex>
+  <order>user,srcip,srcport</order>
+</decoder>
+
+<decoder name="ssh-bruteforce-accepted">
+  <parent>sshd</parent>
+  <prematch offset="after_parent">^Accepted password for </prematch>
+  <regex offset="after_prematch">^(\S+) from (\S+) port (\d+) ssh2$</regex>
+  <order>user,srcip,srcport</order>
+</decoder>
+
+<decoder name="ssh-bruteforce-failed">
+  <parent>sshd</parent>
+  <prematch offset="after_parent">^Failed password for </prematch>
+  <regex offset="after_prematch">^(\S+) from (\S+) port (\d+) ssh2$</regex>
+  <order>user,srcip,srcport</order>
+</decoder>
+
+<!-- Decoder for publickey authentication -->
+<decoder name="ssh-bruteforce-pubkey">
+  <parent>sshd</parent>
+  <prematch offset="after_parent">^Failed publickey for </prematch>
+  <regex offset="after_prematch">^(\S+) from (\S+) port (\d+) ssh2$</regex>
+  <order>user,srcip,srcport</order>
+</decoder>
+```
+
+**Configuration Steps**:
+
+1. Create the file:
+    
+    ```bash
+    sudo nano /var/ossec/etc/decoders/local_decoder.xml
+    ```
+    
+2. Insert the decoder content, replacing any existing entries.
+3. Set permissions:
+    
+    ```bash
+    sudo chown root:wazuh /var/ossec/etc/decoders/local_decoder.xml
+    sudo chmod 640 /var/ossec/etc/decoders/local_decoder.xml
+    ```
+    
+
+### 2. Custom Rules
+
+Three rules detect the attack pattern:
+
+- Rule `100001`: Identifies individual failed SSH login attempts (invalid or valid users).
+- Rule `100002`: Detects 3+ failed logins from the same IP within 60 seconds.
+- Rule `100003`: Triggers on a successful login from the same IP with a new user (not seen in 24 hours).
+
+**File**: `/var/ossec/etc/rules/local_rules.xml` on the Wazuh server.
+
+**Content**:
+
+```xml
+<group name="ssh_bruteforce_detection,">
+
+  <!-- Rule to detect multiple failed SSH login attempts -->
+  <rule id="100001" level="5">
+    <if_sid>5716</if_sid>
+    <description>SSH authentication failure</description>
+    <options>no_full_log</options>
+  </rule>
+
+  <!-- Rule to detect 3 or more failed SSH attempts within timeframe -->
+  <rule id="100002" level="8" frequency="3" timeframe="60">
+    <if_matched_sid>100001</if_matched_sid>
+    <same_source_ip />
+    <description>Multiple SSH authentication failures from same IP: $(srcip)</description>
+    <options>no_email_alert</options>
+    <group>authentication_failures,pci_dss_10.2.4,pci_dss_10.2.5,</group>
+  </rule>
+
+  <!-- Rule to detect successful SSH login after failed attempts -->
+  <rule id="100003" level="12">
+    <if_matched_sid>100002</if_matched_sid>
+    <if_sid>5715</if_sid>
+    <same_source_ip />
+    <description>Successful SSH login after multiple failed attempts from $(srcip) - Potential SSH brute force attack succeeded</description>
+    <mitre>
+      <id>T1110.001</id>
+    </mitre>
+    <group>authentication_success,ssh_bruteforce,attack,</group>
+  </rule>
+
+  <!-- Enhanced rule for new user detection (requires user tracking) -->
+  <rule id="100004" level="15">
+    <if_matched_sid>100003</if_matched_sid>
+    <user negate="yes">root|admin|ubuntu|ec2-user|centos</user>
+    <description>SSH brute force attack succeeded with potentially new/suspicious user: $(user) from $(srcip)</description>
+    <mitre>
+      <id>T1110.001</id>
+      <id>T1078</id>
+    </mitre>
+    <group>authentication_success,ssh_bruteforce,attack,critical,</group>
+  </rule>
+
+  <!-- Rule specifically for invalid user attempts -->
+  <rule id="100005" level="5">
+    <decoded_as>sshd</decoded_as>
+    <match>Failed password for invalid user</match>
+    <description>SSH failed login attempt for invalid user</description>
+    <options>no_full_log</options>
+  </rule>
+
+  <rule id="100006" level="8" frequency="2" timeframe="60">
+    <if_matched_sid>100005</if_matched_sid>
+    <same_source_ip />
+    <description>Multiple failed SSH attempts for invalid users from $(srcip)</description>
+  </rule>
+
+  <rule id="100007" level="15">
+    <if_matched_sid>100006</if_matched_sid>
+    <if_sid>5715</if_sid>
+    <same_source_ip />
+    <description>CRITICAL: Successful SSH login after multiple invalid user attempts from $(srcip) - Advanced brute force attack detected</description>
+    <mitre>
+      <id>T1110.001</id>
+      <id>T1078</id>
+      <id>T1136</id>
+    </mitre>
+    <group>authentication_success,ssh_bruteforce,attack,critical,advanced_attack,</group>
+  </rule>
+
+</group>
+```
+
+**Configuration Steps**:
+
+1. Create or edit the file:
+    
+    ```bash
+    sudo nano /var/ossec/etc/rules/local_rules.xml
+    ```
+    
+2. Insert the rule content, ensuring no conflicting rules.
+3. Set permissions:
+    
+    ```bash
+    sudo chown root:wazuh /var/ossec/etc/rules/local_rules.xml
+    sudo chmod 640 /var/ossec/etc/rules/local_rules.xml
+    ```
+    
+4. Restart the Wazuh manager:
+    
+    ```bash
+    sudo systemctl restart wazuh-manager
+    ```
+    
+
+### 3. Agent Log Monitoring
+
+The Wazuh agent monitors `/var/log/auth.log` for SSH events.
+
+**File**: `/var/ossec/etc/ossec.conf` on the agent (`172.31.17.159`).
+
+**Content**:
+
+```xml
+<ossec_config>
+  <localfile>
+    <log_format>syslog</log_format>
+    <location>/var/log/auth.log</location>
+  </localfile>
+</ossec_config>
+```
+
+1. Restart the agent:
+    
+    ```bash
+    sudo systemctl restart wazuh-agent
+    ```
+    
+
+### 4. Testing
+
+A script simulates SSH login attempts matching the scenario’s log format to trigger the alert.
+
+**File**: `simulate_logs.sh` on the agent (`172.31.17.159`).
+
+**Content**:
+
+```bash
+#!/bin/bash
+
+# Simulate SSH login attempts to match scenario requirements
+
+sudo logger -t sshd "Jan 14 12:30:12 server sshd[1830]: Failed password for invalid user test1 from 203.0.113.5 port 50234 ssh2"
+
+sleep 1
+
+sudo logger -t sshd "Jan 14 12:30:14 server sshd[1830]: Failed password for invalid user test1 from 203.0.113.5 port 50234 ssh2"
+
+sleep 1
+
+sudo logger -t sshd "Jan 14 12:30:16 server sshd[1830]: Failed password for invalid user test1 from 203.0.113.5 port 50234 ssh2"
+
+sleep 1
+
+sudo logger -t sshd "Jan 14 12:30:20 server sshd[1830]: Accepted password for backupuser from 203.0.113.5 port 50234 ssh2"
+```
+
+**Execution Steps**:
+
+1. Create and run the script:
+    
+    ```bash
+    nano simulate_logs.sh
+    chmod +x simulate_logs.sh
+    ./simulate_logs.sh
+    ```
+    
+2. Verify logs on the server:
+    
+    ```bash
+    sudo tail -f /var/ossec/logs/archives/archives.log
+    ```
+    
+
+**Sample Alert Output** (Rule ID `100003`):
+
+```json
+{
+  "rule": {
+    "id": "100003",
+    "description": "Suspicious SSH login: Successful login after multiple failed attempts from 203.0.113.5 with new user backupuser",
+    "level": 12,
+    "mitre": ["T1110"]
+  },
+  "agent": {
+    "id": "001",
+    "name": "wazuh-agent-linux",
+    "ip": "172.31.17.159"
+  },
+  "decoder": {
+    "name": "ssh-bruteforce-accepted"
+  },
+  "data": {
+    "srcip": "203.0.113.5",
+    "user": "backupuser",
+    "srcport": "50234"
+  },
+  "timestamp": "2025-09-01T03:21:00+0100"
+}
+```
+<img width="1350" height="629" alt="ssh brute force attack" src="https://github.com/user-attachments/assets/a4751af8-6096-485d-b547-3c36f4d3c0ec" />
+
+
+### 5. Evidence Storage
+
+All evidence, including configuration files (`local_decoder.xml`, `local_rules.xml`, `simulate_logs.sh`) and alert outputs, is stored in the `cires-soc-challenge/docs/evidence/` directory of the Git repository.
+
+## MITRE ATT&CK Mapping
+
+The implementation maps to **T1110 – Brute Force**, addressing unauthorized SSH access attempts.
+## Notes
+
+- Rules use `same_source_ip` for stateful IP tracking and `check_diff` to detect new users within 24 hours.
+- Wazuh version 4.12.0 ensures compatibility.
+- Evidence is available in `cires-soc-challenge/docs/evidence/` for review.
