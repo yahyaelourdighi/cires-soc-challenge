@@ -2,6 +2,9 @@
 
 This project deploys a Wazuh Security Information and Event Management (SIEM) system on a Docker Swarm cluster using a CI/CD pipeline with GitHub Actions and self-hosted runners. The pipeline builds, scans, tests, and deploys the Wazuh stack, ensuring security, reliability, and reproducibility.
 
+
+**Note:** Using the 0xhoruss account is good because it separates personal and professional work, reducing the risk of cross-contamination if one account is compromised.
+
 ### Accessing the Wazuh Dashboard
 
 The Wazuh dashboard is accessible at https://cires-wazuh-yahya.work.gd.
