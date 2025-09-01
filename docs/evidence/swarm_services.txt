@@ -8,9 +8,6 @@ k9xuf2290mr1   wazuh_wazuh-dashboard   replicated   1/1        wazuh/wazuh-dashb
 j2qqq25z9js7   wazuh_wazuh-worker      replicated   1/1        wazuh/wazuh-manager:4.12.0     
 ID             NAME                IMAGE          NODE               DESIRED STATE   CURRENT STATE            ERROR                       PORTS
 k0l2g65zii83   wazuh_nginx.1       nginx:stable   ip-172-31-16-188   Running         Starting 7 minutes ago                               
-8u7ad236o8pg    \_ wazuh_nginx.1   nginx:stable   ip-172-31-16-188   Shutdown        Failed 7 minutes ago     "task: non-zero exit (1)"   
-go8epitnwu3u    \_ wazuh_nginx.1   nginx:stable   ip-172-31-16-188   Shutdown        Failed 7 minutes ago     "task: non-zero exit (1)"   
-k0hrv4qlk1xj    \_ wazuh_nginx.1   nginx:stable   ip-172-31-16-188   Shutdown        Failed 7 minutes ago     "task: non-zero exit (1)"   
 ID             NAME                     IMAGE                        NODE               DESIRED STATE   CURRENT STATE           ERROR     PORTS
 yoy2mtawku5f   wazuh_wazuh1-indexer.1   wazuh/wazuh-indexer:4.12.0   ip-172-31-16-188   Running         Running 5 minutes ago             *:9200->9200/tcp,*:9200->9200/tcp
 ID             NAME                     IMAGE                        NODE               DESIRED STATE   CURRENT STATE           ERROR     PORTS
