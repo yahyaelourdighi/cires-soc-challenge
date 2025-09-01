@@ -1,0 +1,75 @@
+<!-- Local rules -->
+
+<!-- Modify it at your will. -->
+<!-- Copyright (C) 2015, Wazuh Inc. -->
+
+<group name="ssh_bruteforce_detection,">
+
+  <!-- Rule to detect multiple failed SSH login attempts -->
+  <rule id="100001" level="5">
+    <if_sid>5716</if_sid>
+    <description>SSH authentication failure</description>
+    <options>no_full_log</options>
+  </rule>
+
+  <!-- Rule to detect 3 or more failed SSH attempts within timeframe -->
+  <rule id="100002" level="8" frequency="3" timeframe="60">
+    <if_matched_sid>100001</if_matched_sid>
+    <same_source_ip />
+    <description>Multiple SSH authentication failures from same IP: $(srcip)</description>
+    <options>no_email_alert</options>
+    <group>authentication_failures,pci_dss_10.2.4,pci_dss_10.2.5,</group>
+  </rule>
+
+  <!-- Rule to detect successful SSH login after failed attempts -->
+  <rule id="100003" level="12">
+    <if_matched_sid>100002</if_matched_sid>
+    <if_sid>5715</if_sid>
+    <same_source_ip />
+    <description>Successful SSH login after multiple failed attempts from $(srcip) - Potential SSH brute force attack succeeded</description>
+    <mitre>
+      <id>T1110.001</id>
+    </mitre>
+    <group>authentication_success,ssh_bruteforce,attack,</group>
+  </rule>
+
+  <!-- Enhanced rule for new user detection (requires user tracking) -->
+  <rule id="100004" level="15">
+    <if_matched_sid>100003</if_matched_sid>
+    <user negate="yes">root|admin|ubuntu|ec2-user|centos</user>
+    <description>SSH brute force attack succeeded with potentially new/suspicious user: $(user) from $(srcip)</description>
+    <mitre>
+      <id>T1110.001</id>
+      <id>T1078</id>
+    </mitre>
+    <group>authentication_success,ssh_bruteforce,attack,critical,</group>
+  </rule>
+
+  <!-- Rule specifically for invalid user attempts -->
+  <rule id="100005" level="5">
+    <decoded_as>sshd</decoded_as>
+    <match>Failed password for invalid user</match>
+    <description>SSH failed login attempt for invalid user</description>
+    <options>no_full_log</options>
+  </rule>
+
+  <rule id="100006" level="8" frequency="2" timeframe="60">
+    <if_matched_sid>100005</if_matched_sid>
+    <same_source_ip />
+    <description>Multiple failed SSH attempts for invalid users from $(srcip)</description>
+  </rule>
+
+  <rule id="100007" level="15">
+    <if_matched_sid>100006</if_matched_sid>
+    <if_sid>5715</if_sid>
+    <same_source_ip />
+    <description>CRITICAL: Successful SSH login after multiple invalid user attempts from $(srcip) - Advanced brute force attack detected</description>
+    <mitre>
+      <id>T1110.001</id>
+      <id>T1078</id>
+      <id>T1136</id>
+    </mitre>
+    <group>authentication_success,ssh_bruteforce,attack,critical,advanced_attack,</group>
+  </rule>
+
+</group>

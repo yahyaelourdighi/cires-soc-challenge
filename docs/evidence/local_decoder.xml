@@ -1,0 +1,51 @@
+<!-- Local Decoders -->
+
+<!-- Modify it at your will. -->
+<!-- Copyright (C) 2015, Wazuh Inc. -->
+
+<!--
+  - Allowed static fields:
+  - location   - where the log came from (only on FTS)
+  - srcuser    - extracts the source username
+  - dstuser    - extracts the destination (target) username
+  - user       - an alias to dstuser (only one of the two can be used)
+  - srcip      - source ip
+  - dstip      - dst ip
+  - srcport    - source port
+  - dstport    - destination port
+  - protocol   - protocol
+  - id         - event id
+  - url        - url of the event
+  - action     - event action (deny, drop, accept, etc)
+  - status     - event status (success, failure, etc)
+  - extra_data - Any extra data
+-->
+
+<decoder name="ssh-bruteforce-invalid">
+  <parent>sshd</parent>
+  <prematch offset="after_parent">^Failed password for invalid user </prematch>
+  <regex offset="after_prematch">^(\S+) from (\S+) port (\d+) ssh2$</regex>
+  <order>user,srcip,srcport</order>
+</decoder>
+
+<decoder name="ssh-bruteforce-accepted">
+  <parent>sshd</parent>
+  <prematch offset="after_parent">^Accepted password for </prematch>
+  <regex offset="after_prematch">^(\S+) from (\S+) port (\d+) ssh2$</regex>
+  <order>user,srcip,srcport</order>
+</decoder>
+
+<decoder name="ssh-bruteforce-failed">
+  <parent>sshd</parent>
+  <prematch offset="after_parent">^Failed password for </prematch>
+  <regex offset="after_prematch">^(\S+) from (\S+) port (\d+) ssh2$</regex>
+  <order>user,srcip,srcport</order>
+</decoder>
+
+<!-- Decoder for publickey authentication -->
+<decoder name="ssh-bruteforce-pubkey">
+  <parent>sshd</parent>
+  <prematch offset="after_parent">^Failed publickey for </prematch>
+  <regex offset="after_prematch">^(\S+) from (\S+) port (\d+) ssh2$</regex>
+  <order>user,srcip,srcport</order>
+</decoder>
