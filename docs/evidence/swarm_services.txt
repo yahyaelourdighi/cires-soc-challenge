@@ -7,6 +7,7 @@ k9xuf2290mr1   wazuh_wazuh-dashboard   replicated   1/1        wazuh/wazuh-dashb
 0x8zke0opihg   wazuh_wazuh-master      replicated   1/1        wazuh/wazuh-manager:4.12.0     
 j2qqq25z9js7   wazuh_wazuh-worker      replicated   1/1        wazuh/wazuh-manager:4.12.0     
 ID             NAME                IMAGE          NODE               DESIRED STATE   CURRENT STATE            ERROR                       PORTS
+<<<<<<< HEAD
 k0l2g65zii83   wazuh_nginx.1       nginx:stable   ip-172-31-16-188   Running         Starting 2 minutes ago                               
 8u7ad236o8pg    \_ wazuh_nginx.1   nginx:stable   ip-172-31-16-188   Shutdown        Failed 2 minutes ago     "task: non-zero exit (1)"   
 go8epitnwu3u    \_ wazuh_nginx.1   nginx:stable   ip-172-31-16-188   Shutdown        Failed 2 minutes ago     "task: non-zero exit (1)"   
@@ -23,3 +24,18 @@ ID             NAME                   IMAGE                        NODE         
 ojonptgklpsl   wazuh_wazuh-worker.1   wazuh/wazuh-manager:4.12.0   ip-172-31-16-188   Running         Running about a minute ago             
 ID             NAME                      IMAGE                          NODE               DESIRED STATE   CURRENT STATE           ERROR     PORTS
 m6efgjnaav6e   wazuh_wazuh-dashboard.1   wazuh/wazuh-dashboard:4.12.0   ip-172-31-16-188   Running         Running 2 minutes ago             *:5601->5601/tcp,*:5601->5601/tcp
+=======
+k0l2g65zii83   wazuh_nginx.1       nginx:stable   ip-172-31-16-188   Running         Starting 7 minutes ago                               
+ID             NAME                     IMAGE                        NODE               DESIRED STATE   CURRENT STATE           ERROR     PORTS
+yoy2mtawku5f   wazuh_wazuh1-indexer.1   wazuh/wazuh-indexer:4.12.0   ip-172-31-16-188   Running         Running 5 minutes ago             *:9200->9200/tcp,*:9200->9200/tcp
+ID             NAME                     IMAGE                        NODE               DESIRED STATE   CURRENT STATE           ERROR     PORTS
+avq6z4ite0j7   wazuh_wazuh2-indexer.1   wazuh/wazuh-indexer:4.12.0   ip-172-31-16-188   Running         Running 5 minutes ago             
+ID             NAME                     IMAGE                        NODE               DESIRED STATE   CURRENT STATE           ERROR     PORTS
+z27u8jejihah   wazuh_wazuh3-indexer.1   wazuh/wazuh-indexer:4.12.0   ip-172-31-16-188   Running         Running 5 minutes ago             
+ID             NAME                   IMAGE                        NODE               DESIRED STATE   CURRENT STATE           ERROR     PORTS
+vqztkpmqn8j8   wazuh_wazuh-master.1   wazuh/wazuh-manager:4.12.0   ip-172-31-16-188   Running         Running 7 minutes ago             *:1514->1514/tcp,*:1514->1514/tcp,*:514->514/udp,*:514->514/udp,*:55000->55000/tcp,*:55000->55000/tcp,*:1515->1515/tcp,*:1515->1515/tcp
+ID             NAME                   IMAGE                        NODE               DESIRED STATE   CURRENT STATE           ERROR     PORTS
+ojonptgklpsl   wazuh_wazuh-worker.1   wazuh/wazuh-manager:4.12.0   ip-172-31-16-188   Running         Running 7 minutes ago             
+ID             NAME                      IMAGE                          NODE               DESIRED STATE   CURRENT STATE           ERROR     PORTS
+m6efgjnaav6e   wazuh_wazuh-dashboard.1   wazuh/wazuh-dashboard:4.12.0   ip-172-31-16-188   Running         Running 7 minutes ago             *:5601->5601/tcp,*:5601->5601/tcp
+>>>>>>> feature/update-readme

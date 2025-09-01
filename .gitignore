@@ -29,3 +29,11 @@ tests/selenium/__pycache__/
 # IDE and editor files
 .vscode/
 .idea/
+*.pyc pycache/
+*.dockerignore
+ansible/*.retry
+secrets/vault-pass.txt
+*.pem *.key *.crt
+*.log
+*.bak *.swp *~
+.env venv/
